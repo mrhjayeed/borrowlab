@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -144,12 +145,12 @@ router.put('/:id/review', authenticateToken, requireRole(['ADMIN', 'MODERATOR'])
 
     const result = await query(
       `UPDATE damage_reports SET
-        status = $1,
-        approved_cost = COALESCE($2, approved_cost),
-        resolved_at = CASE WHEN $1 IN ('ACCEPTED', 'REJECTED', 'SETTLED') THEN NOW() ELSE resolved_at END
-       WHERE damage_report_id = $3
+        status = $1::damage_status,
+        approved_cost = COALESCE($2::numeric, approved_cost),
+        resolved_at = CASE WHEN $1::text IN ('ACCEPTED', 'REJECTED', 'SETTLED') THEN NOW() ELSE resolved_at END
+       WHERE damage_report_id = $3::bigint
        RETURNING *`,
-      [status, approved_cost || null, req.params.id]
+      [status, approved_cost !== undefined ? approved_cost : null, req.params.id]
     );
 
     if (result.rows.length === 0) {
@@ -157,7 +158,23 @@ router.put('/:id/review', authenticateToken, requireRole(['ADMIN', 'MODERATOR'])
       return;
     }
 
-    res.json({ report: result.rows[0] });
+    const report = result.rows[0];
+
+    try {
+      await logAudit(null, req.user!.userId, 'UPDATE', 'damage_reports', report.damage_report_id, null, {
+        status,
+        approved_cost,
+      });
+
+      realtime.broadcast('RENTAL_UPDATED', {
+        rental_id: report.rental_id,
+        damage_report_id: report.damage_report_id,
+      });
+    } catch (auditErr) {
+      console.error('Audit or realtime error in damage review:', auditErr);
+    }
+
+    res.json({ report });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

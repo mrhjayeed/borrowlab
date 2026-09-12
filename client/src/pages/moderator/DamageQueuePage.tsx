@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { DamageReport } from '../../types';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -38,6 +39,10 @@ export const DamageQueuePage: React.FC = () => {
   useEffect(() => {
     fetchReports();
   }, []);
+
+  useRealtimeEvent(['RENTAL_UPDATED', 'DAMAGE_REPORT_UPDATED'], () => {
+    fetchReports();
+  });
 
   const handleReviewAction = async (status: 'ACCEPTED' | 'REJECTED' | 'UNDER_REVIEW') => {
     if (!selectedReport) return;
