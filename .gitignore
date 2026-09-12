@@ -50,7 +50,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# Temporary files
+# Temporary & Upload files
 .temp/
 tmp/
 scratch/
+uploads/
+server/uploads/

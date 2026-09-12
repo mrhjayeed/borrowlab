@@ -14,7 +14,7 @@ const createListingSchema = z.object({
   listing_title: z.string().min(5).max(200),
   description: z.string().optional(),
   pickup_information: z.string().max(500).optional(),
-  image_urls: z.array(z.string().url()).optional(),
+  image_urls: z.array(z.string().min(1)).optional(),
 });
 
 // GET /api/listings

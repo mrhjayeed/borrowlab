@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -20,6 +20,10 @@ import {
   Trash2,
   AlertCircle,
   Image as ImageIcon,
+  UploadCloud,
+  Camera,
+  Loader2,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 export const MyHardwarePage: React.FC = () => {
@@ -44,6 +48,55 @@ export const MyHardwarePage: React.FC = () => {
     { accessory_name: 'Power Cable / Adapter', quantity: 1, replacement_value: 500, is_required: true },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Conventional Photo Upload & URL State
+  const [photoSourceMode, setPhotoSourceMode] = useState<'upload' | 'url'>('upload');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      error('Please select an image file (PNG, JPG, WEBP, GIF)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      error('Image size exceeds 5MB limit');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Instant local preview
+    const localUrl = URL.createObjectURL(file);
+    setFilePreview(localUrl);
+
+    // Upload to server
+    setIsUploadingPhoto(true);
+    try {
+      const res = await api.uploadImage(file);
+      setImageUrl(res.url);
+      success('Image attached', `${file.name} uploaded successfully`);
+    } catch (err: any) {
+      error(err.message || 'Failed to upload photo');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleClearSelectedPhoto = () => {
+    if (filePreview && filePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(filePreview);
+    }
+    setSelectedFile(null);
+    setFilePreview(null);
+    setImageUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const fetchInventory = async () => {
     setIsLoading(true);
@@ -80,6 +133,10 @@ export const MyHardwarePage: React.FC = () => {
       error('Inventory code is required');
       return;
     }
+    if (isUploadingPhoto) {
+      error('Photo is still uploading, please wait a moment');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -100,7 +157,7 @@ export const MyHardwarePage: React.FC = () => {
       // Reset form
       setInventoryCode('');
       setSerialNumber('');
-      setImageUrl('');
+      handleClearSelectedPhoto();
       fetchInventory();
     } catch (err: any) {
       error(err.message || 'Failed to register hardware');
@@ -263,40 +320,206 @@ export const MyHardwarePage: React.FC = () => {
             />
           </div>
 
-          {/* Asset Photo URL with blueprint placeholder preview hint */}
-          <div className="space-y-1.5">
-            <Input
-              label="Equipment Photo URL (Optional)"
-              placeholder="https://images.unsplash.com/... or leave blank for placeholder"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-            />
-            <div className="flex items-center gap-2 text-[11px] text-slate-500">
-              <span className="text-slate-400">Presets:</span>
-              <button
-                type="button"
-                onClick={() => setImageUrl('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80')}
-                className="text-[#4F46E5] hover:underline font-medium"
-              >
-                Board Photo
-              </button>
-              <span>•</span>
-              <button
-                type="button"
-                onClick={() => setImageUrl('https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80')}
-                className="text-[#4F46E5] hover:underline font-medium"
-              >
-                Lab Bench Photo
-              </button>
-              <span>•</span>
-              <button
-                type="button"
-                onClick={() => setImageUrl('')}
-                className="text-slate-500 hover:underline"
-              >
-                Leave Empty (Use Placeholder)
-              </button>
+          {/* Equipment Photo: Conventional File Upload or URL */}
+          <div className="space-y-2 border border-slate-200 rounded-[8px] p-3.5 bg-slate-50/50">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-[#4F46E5]" />
+                Equipment Photo (Optional)
+              </label>
+
+              {/* Mode Switcher: Conventional Upload vs URL */}
+              <div className="flex items-center bg-slate-200/70 p-0.5 rounded-[6px] text-[11px] font-medium">
+                <button
+                  type="button"
+                  onClick={() => setPhotoSourceMode('upload')}
+                  className={`px-2.5 py-1 rounded-[5px] transition-all flex items-center gap-1 ${
+                    photoSourceMode === 'upload'
+                      ? 'bg-white text-slate-900 font-semibold shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <UploadCloud className="w-3 h-3" />
+                  Upload Photo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoSourceMode('url')}
+                  className={`px-2.5 py-1 rounded-[5px] transition-all flex items-center gap-1 ${
+                    photoSourceMode === 'url'
+                      ? 'bg-white text-slate-900 font-semibold shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <LinkIcon className="w-3 h-3" />
+                  Image URL
+                </button>
+              </div>
             </div>
+
+            {photoSourceMode === 'upload' ? (
+              <div className="space-y-2">
+                {!filePreview && !imageUrl ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleFileSelect(file);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition-all ${
+                      isDragOver
+                        ? 'border-[#4F46E5] bg-indigo-50/50'
+                        : 'border-slate-300 hover:border-slate-400 bg-white'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileSelect(file);
+                      }}
+                    />
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 text-[#4F46E5] mx-auto flex items-center justify-center mb-2">
+                      <UploadCloud className="w-5 h-5" />
+                    </div>
+                    <div className="text-xs font-semibold text-slate-800">
+                      Click to choose photo or drag & drop here
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      Supports JPG, PNG, WEBP up to 5MB
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200">
+                    <div className="w-16 h-16 rounded-md overflow-hidden bg-slate-100 shrink-0 border border-slate-200 relative">
+                      <img
+                        src={filePreview || imageUrl}
+                        alt="Hardware preview"
+                        className="w-full h-full object-cover"
+                      />
+                      {isUploadingPhoto && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <Loader2 className="w-4 h-4 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 text-xs">
+                      <div className="font-semibold text-slate-800 truncate">
+                        {selectedFile?.name || 'Uploaded Hardware Photo'}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                        {isUploadingPhoto ? (
+                          <span className="text-indigo-600 font-medium flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Uploading to server...
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600 font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB • Attached` : 'Attached to unit'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileSelect(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
+                        title="Change photo"
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearSelectedPhoto}
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                        title="Remove photo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  label=""
+                  placeholder="https://images.unsplash.com/... or paste image URL"
+                  value={imageUrl}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    setFilePreview(null);
+                    setSelectedFile(null);
+                  }}
+                />
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageUrl('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80');
+                        setFilePreview(null);
+                        setSelectedFile(null);
+                      }}
+                      className="text-[#4F46E5] hover:underline font-medium"
+                    >
+                      Board Photo
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageUrl('https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80');
+                        setFilePreview(null);
+                        setSelectedFile(null);
+                      }}
+                      className="text-[#4F46E5] hover:underline font-medium"
+                    >
+                      Lab Bench Photo
+                    </button>
+                  </div>
+                  {imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl('')}
+                      className="text-slate-500 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {imageUrl && (
+                  <div className="flex items-center gap-2 bg-white p-2 rounded border border-slate-200">
+                    <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
+                      <img src={imageUrl} alt="URL Preview" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-xs text-slate-600 truncate font-mono">{imageUrl}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

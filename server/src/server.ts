@@ -18,7 +18,10 @@ import waitlistRouter from './routes/waitlist.js';
 import notificationsRouter from './routes/notifications.js';
 import maintenanceRouter from './routes/maintenance.js';
 import adminRouter from './routes/admin.js';
+import uploadRouter from './routes/upload.js';
 import { query } from './config/db.js';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -31,6 +34,13 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Serve static uploaded physical hardware photos
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // API Health Check
 app.get('/api/health', async (_req: Request, res: Response) => {
@@ -68,6 +78,7 @@ app.use('/api/waitlist', waitlistRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/maintenance', maintenanceRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/upload', uploadRouter);
 
 // Global Error Handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

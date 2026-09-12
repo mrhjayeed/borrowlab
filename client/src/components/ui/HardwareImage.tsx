@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Activity, CircuitBoard, Wrench, Boxes, ImageOff } from 'lucide-react';
+import { Cpu, Activity, CircuitBoard, Wrench, Boxes, ImageOff, Image as ImageIcon } from 'lucide-react';
 
 export interface HardwareImageProps {
   src?: string | null;
@@ -50,24 +50,37 @@ export const HardwareImage: React.FC<HardwareImageProps> = ({
     return <Boxes className="w-6 h-6 text-slate-600" />;
   };
 
-  const showPlaceholder = !src || hasError;
+  const resolvedSrc = src?.startsWith('/uploads')
+    ? (import.meta.env.VITE_API_BASE
+        ? `${import.meta.env.VITE_API_BASE.replace(/\/api\/?$/, '')}${src}`
+        : src)
+    : src;
+
+  const showPlaceholder = !resolvedSrc || hasError;
 
   return (
     <div
       className={`relative overflow-hidden bg-[#F8FAFC] select-none flex items-center justify-center border-b border-slate-200/80 ${className}`}
     >
       {/* If we have a valid src and no error, render the actual image */}
-      {src && !hasError && (
-        <img
-          src={src}
-          alt={alt}
-          onLoad={() => setIsLoaded(true)}
-          onError={() => setHasError(true)}
-          className={`${imgClassName} transition-opacity duration-300 ${
-            isLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
-          loading="lazy"
-        />
+      {resolvedSrc && !hasError && (
+        <>
+          {!isLoaded && (
+            <div className="absolute inset-0 bg-slate-100 flex items-center justify-center animate-pulse">
+              <ImageIcon className="w-6 h-6 text-slate-300" />
+            </div>
+          )}
+          <img
+            src={resolvedSrc}
+            alt={alt}
+            onLoad={() => setIsLoaded(true)}
+            onError={() => setHasError(true)}
+            className={`${imgClassName} transition-opacity duration-300 ${
+              isLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            loading="lazy"
+          />
+        </>
       )}
 
       {/* Engineering Precision Placeholder */}

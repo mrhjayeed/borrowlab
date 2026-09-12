@@ -92,6 +92,27 @@ export const api = {
     body: JSON.stringify(payload),
   }),
 
+  // Upload
+  uploadImage: async (file: File): Promise<{ url: string; filename: string; size: number; mimetype: string }> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new ApiError(data.error || 'Failed to upload image file', response.status, data);
+    }
+    return data;
+  },
+
   // Listings & Marketplace
   getListings: (params?: Record<string, any>) => {
     const q = new URLSearchParams();
