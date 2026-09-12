@@ -1,0 +1,78 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        canvas: '#F8FAFC',
+        surface: {
+          DEFAULT: '#FFFFFF',
+          dim: '#F1F5F9',
+          card: '#FFFFFF',
+        },
+        hairline: {
+          DEFAULT: '#E2E8F0',
+          subtle: '#F1F5F9',
+          strong: '#CBD5E1',
+        },
+        brand: {
+          50: '#EEF2FF',
+          100: '#E0E7FF',
+          200: '#C7D2FE',
+          500: '#6366F1',
+          600: '#4F46E5', // Primary accent
+          700: '#4338CA',
+          800: '#3730A3',
+          900: '#312E81',
+        },
+        escrow: {
+          DEFAULT: '#06B6D4', // Cyan accent
+          tint: '#ECFEFF',
+          stroke: '#A5F3FC',
+          text: '#0E7490',
+        },
+        hardware: {
+          available: {
+            DEFAULT: '#10B981',
+            tint: '#ECFDF5',
+            stroke: '#A7F3D0',
+            text: '#047857',
+          },
+          reserved: {
+            DEFAULT: '#F59E0B',
+            tint: '#FFFBEB',
+            stroke: '#FDE68A',
+            text: '#B45309',
+          },
+          fault: {
+            DEFAULT: '#EF4444',
+            tint: '#FEF2F2',
+            stroke: '#FECACA',
+            text: '#B91C1C',
+          },
+        },
+        slate: {
+          850: '#151F32',
+          950: '#090D16',
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
+      boxShadow: {
+        'level-1': '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
+        'level-2': '0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04)',
+        'level-3': '0 20px 25px -5px rgba(15, 23, 42, 0.10), 0 8px 10px -6px rgba(15, 23, 42, 0.04)',
+      },
+      borderRadius: {
+        'instrument': '6px',
+      },
+    },
+  },
+  plugins: [],
+}

@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --canvas-bg: #F8FAFC;
+    --surface-bg: #FFFFFF;
+    --border-color: #E2E8F0;
+  }
+
+  body {
+    background-color: var(--canvas-bg);
+    color: #0F172A;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Universal tabular figures for numeric accuracy */
+  .tabular-numbers,
+  .tabular-nums,
+  [data-tabular="true"] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .label-caps {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748B;
+  }
+
+  .mono-data {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mono-data-sm {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 14px;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hairline-border {
+    border: 1px solid #E2E8F0;
+  }
+
+  .hairline-border-b {
+    border-bottom: 1px solid #E2E8F0;
+  }
+
+  .hairline-border-r {
+    border-right: 1px solid #E2E8F0;
+  }
+
+  .hairline-border-t {
+    border-top: 1px solid #E2E8F0;
+  }
+}
+
+/* Custom scrollbar for dense data panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
