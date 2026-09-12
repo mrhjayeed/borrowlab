@@ -58,7 +58,31 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
         e.held_amount AS escrow_held_amount,
         ret.return_id,
         ret.condition_after_return,
-        ret.damage_found
+        ret.damage_found,
+        (
+          SELECT json_build_object(
+            'review_id', my_rev.review_id,
+            'rating', my_rev.rating,
+            'comment', my_rev.comment,
+            'created_at', my_rev.created_at
+          )
+          FROM reviews my_rev
+          WHERE my_rev.rental_id = r.rental_id AND my_rev.reviewer_id = $1
+          LIMIT 1
+        ) AS my_review,
+        (
+          SELECT json_build_object(
+            'review_id', peer_rev.review_id,
+            'rating', peer_rev.rating,
+            'comment', peer_rev.comment,
+            'reviewer_name', u_rev.full_name,
+            'created_at', peer_rev.created_at
+          )
+          FROM reviews peer_rev
+          JOIN users u_rev ON peer_rev.reviewer_id = u_rev.user_id
+          WHERE peer_rev.rental_id = r.rental_id AND peer_rev.reviewer_id != $1
+          LIMIT 1
+        ) AS peer_review
       FROM rentals r
       JOIN listings l ON r.listing_id = l.listing_id
       JOIN inventory i ON r.inventory_id = i.inventory_id
@@ -69,17 +93,14 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       LEFT JOIN returns ret ON r.rental_id = ret.rental_id
       WHERE 1=1
     `;
-    const params: any[] = [];
+    const params: any[] = [req.user!.userId];
 
     if (role === 'borrower') {
-      params.push(req.user!.userId);
-      sql += ` AND r.borrower_id = $${params.length}`;
+      sql += ` AND r.borrower_id = $1`;
     } else if (role === 'owner') {
-      params.push(req.user!.userId);
-      sql += ` AND r.owner_id = $${params.length}`;
+      sql += ` AND r.owner_id = $1`;
     } else {
-      params.push(req.user!.userId);
-      sql += ` AND (r.borrower_id = $${params.length} OR r.owner_id = $${params.length})`;
+      sql += ` AND (r.borrower_id = $1 OR r.owner_id = $1)`;
     }
 
     sql += ` ORDER BY r.created_at DESC`;
@@ -201,6 +222,9 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
       [rental.rental_id]
     );
 
+    const myReview = reviewsRes.rows.find((rev) => Number(rev.reviewer_id) === Number(req.user!.userId)) || null;
+    const peerReview = reviewsRes.rows.find((rev) => Number(rev.reviewer_id) !== Number(req.user!.userId)) || null;
+
     res.json({
       rental: {
         ...rental,
@@ -208,6 +232,8 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
         damageReports: damageRes.rows,
         disputes: disputeRes.rows,
         reviews: reviewsRes.rows,
+        my_review: myReview,
+        peer_review: peerReview,
       },
     });
   } catch (err: any) {

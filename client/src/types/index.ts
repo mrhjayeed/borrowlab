@@ -192,6 +192,19 @@ export interface Rental {
   return_id?: number;
   condition_after_return?: InventoryCondition;
   damage_found?: boolean;
+  my_review?: {
+    review_id: number;
+    rating: number;
+    comment: string;
+    created_at: string;
+  } | null;
+  peer_review?: {
+    review_id: number;
+    rating: number;
+    comment: string;
+    reviewer_name?: string;
+    created_at: string;
+  } | null;
 }
 
 export interface Wallet {

@@ -3,13 +3,14 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
 const createReviewSchema = z.object({
   rental_id: z.coerce.number().int().positive(),
   rating: z.coerce.number().int().min(1).max(5),
-  comment: z.string().min(5),
+  comment: z.string().trim().min(5, 'Review comment must be at least 5 characters'),
 });
 
 // POST /api/reviews
@@ -87,6 +88,33 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 
       return insRes.rows[0];
     });
+
+    // Safely notify reviewee about the peer review
+    try {
+      await query(
+        `INSERT INTO notifications (user_id, notification_type, title, message, related_rental_id)
+         VALUES ($1, 'REVIEW_RECEIVED', 'New Peer Review Received', $2, $3)`,
+        [
+          revieweeId,
+          `${req.user!.fullName} gave you a ${rating}-star review for Rental #${rental.rental_id}.`,
+          rental.rental_id,
+        ]
+      );
+
+      realtime.sendToUser(revieweeId, 'NOTIFICATION', {
+        title: 'New Peer Review Received',
+        message: `${req.user!.fullName} left you a ${rating}-star review`,
+        related_rental_id: rental.rental_id,
+      });
+      realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+        rental_id: rental.rental_id,
+      });
+      realtime.sendToUser(revieweeId, 'WALLET_UPDATED', {
+        user_id: revieweeId,
+      });
+    } catch (notifErr) {
+      console.error('Failed to send review notification:', notifErr);
+    }
 
     res.status(201).json({ review });
   } catch (err: any) {

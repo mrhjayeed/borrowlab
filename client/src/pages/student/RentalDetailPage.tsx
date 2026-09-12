@@ -5,8 +5,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { StatusBadge } from '../../components/ui/Badge';
 import { TrustGauge } from '../../components/ui/TrustGauge';
+import { useToast } from '../../context/ToastContext';
 import {
   Calendar,
   Lock,
@@ -18,19 +20,51 @@ import {
   CheckCircle2,
   Cpu,
   ArrowRight,
+  Star,
 } from 'lucide-react';
 
 export const RentalDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { success, error } = useToast();
   const [rental, setRental] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Review Modal State
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   const loadRental = () => {
     if (!id) return;
     api.getRentalDetail(id)
       .then((res) => setRental(res.rental))
       .catch(() => {});
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!rental) return;
+    if (reviewComment.trim().length < 5) {
+      error('Review comment too short', 'Please provide at least 5 characters sharing your peer lending experience.');
+      return;
+    }
+    setIsSubmittingReview(true);
+    try {
+      await api.createReview({
+        rental_id: rental.rental_id,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      success('Review published', 'Thank you for contributing to campus trust reputation.');
+      setIsReviewModalOpen(false);
+      setReviewComment('');
+      loadRental();
+    } catch (err: any) {
+      error(err.message || 'Failed to submit review');
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   useEffect(() => {
@@ -188,6 +222,89 @@ export const RentalDetailPage: React.FC = () => {
               ))}
             </Card>
           )}
+
+          {/* Peer Reviews & Trust Section */}
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                <h3 className="font-semibold text-slate-900 text-sm">Peer Reviews & Reputation</h3>
+                <span className="text-xs text-slate-400 font-mono">
+                  ({(rental.reviews || []).length})
+                </span>
+              </div>
+
+              {rental.status === 'COMPLETED' && (
+                <div>
+                  {rental.my_review ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[6px] bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+                      <div className="flex items-center text-amber-500">
+                        {[...Array(rental.my_review.rating)].map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                      Reviewed ({rental.my_review.rating}/5)
+                    </span>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-[#4F46E5] border-indigo-200 hover:bg-indigo-50 gap-1.5"
+                      onClick={() => {
+                        setReviewRating(5);
+                        setReviewComment('');
+                        setIsReviewModalOpen(true);
+                      }}
+                    >
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      Leave Peer Review
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {rental.reviews && rental.reviews.length > 0 ? (
+              <div className="space-y-3">
+                {rental.reviews.map((rev: any) => (
+                  <div
+                    key={rev.review_id}
+                    className="p-3.5 rounded-[6px] bg-slate-50 border border-slate-200 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="font-semibold text-slate-800 flex items-center gap-2">
+                        <span>{rev.reviewer_name}</span>
+                        {Number(rev.reviewer_id) === Number(user?.userId) && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-[#4F46E5] font-normal">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center text-amber-500">
+                        {[...Array(rev.rating)].map((_, i) => (
+                          <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        ))}
+                        <span className="ml-1 text-[11px] font-mono text-slate-500">
+                          {rev.rating}/5
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-700 leading-relaxed">{rev.comment}</p>
+                    <div className="text-[10px] text-slate-400">
+                      {new Date(rev.created_at).toLocaleDateString()} at{' '}
+                      {new Date(rev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 py-2">
+                {rental.status === 'COMPLETED'
+                  ? 'No peer reviews submitted yet for this completed rental.'
+                  : 'Peer reviews unlock once this hardware rental is safely returned and completed.'}
+              </p>
+            )}
+          </Card>
         </div>
 
         {/* Right 1 Column: Participants & Escrow Financial Ledger */}
@@ -271,6 +388,57 @@ export const RentalDetailPage: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Review Modal */}
+      <Modal
+        isOpen={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        title="Submit Peer Review"
+        subtitle={`Rental #${rental?.rental_id} • ${rental?.component_name}`}
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Rating (1 to 5 Stars)
+            </label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setReviewRating(star)}
+                  className="p-1 text-amber-500 hover:scale-110 transition-transform"
+                >
+                  <Star className={`w-6 h-6 ${star <= reviewRating ? 'fill-amber-500' : 'text-slate-300'}`} />
+                </button>
+              ))}
+              <span className="text-xs font-mono font-bold text-slate-700 ml-2">{reviewRating} / 5</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">Review Comment</label>
+              <span className={`text-[11px] font-mono ${reviewComment.trim().length < 5 ? 'text-amber-600 font-semibold' : 'text-slate-400'}`}>
+                {reviewComment.trim().length}/5 chars min
+              </span>
+            </div>
+            <textarea
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              placeholder="Describe punctuality, hardware cleanliness, communication, and overall peer experience..."
+              rows={3}
+              className="w-full p-2.5 text-xs border border-slate-300 rounded-[6px] focus:outline-none focus:border-[#4F46E5]"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button variant="secondary" onClick={() => setIsReviewModalOpen(false)}>Cancel</Button>
+            <Button variant="primary" isLoading={isSubmittingReview} disabled={reviewComment.trim().length < 5} onClick={handleReviewSubmit}>
+              Publish Review
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
