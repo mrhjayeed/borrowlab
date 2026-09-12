@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { ListingAvailabilityItem, ComponentCategory } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -65,6 +66,10 @@ export const BrowseHardwarePage: React.FC = () => {
   useEffect(() => {
     fetchListings();
   }, [categoryId, condition, isRentableOnly, sort]);
+
+  useRealtimeEvent(['LISTING_UPDATED', 'RENTAL_UPDATED'], () => {
+    fetchListings();
+  });
 
   const handleApplyFilters = (e: React.FormEvent) => {
     e.preventDefault();

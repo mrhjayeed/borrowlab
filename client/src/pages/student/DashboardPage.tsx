@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { api } from '../../api/client';
 import { Rental, WalletTransaction } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -29,8 +30,7 @@ export const DashboardPage: React.FC = () => {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    setIsLoading(true);
+  const fetchDashboardData = () => {
     Promise.all([
       api.getMyRentals('borrower'),
       api.getMyRentals('owner'),
@@ -43,7 +43,16 @@ export const DashboardPage: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetchDashboardData();
   }, []);
+
+  useRealtimeEvent(['RENTAL_UPDATED', 'WALLET_UPDATED', 'DISPUTE_RESOLVED'], () => {
+    fetchDashboardData();
+  });
 
   const activeBorrows = borrowedRentals.filter((r) => ['ACTIVE', 'APPROVED', 'REQUESTED', 'OVERDUE'].includes(r.status));
   const activeLends = lendedRentals.filter((r) => ['ACTIVE', 'APPROVED', 'REQUESTED', 'OVERDUE', 'RETURN_PENDING'].includes(r.status));

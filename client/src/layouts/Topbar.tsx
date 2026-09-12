@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useRealtime, useRealtimeEvent } from '../context/RealtimeContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../api/client';
 import { TrustGauge } from '../components/ui/TrustGauge';
@@ -24,6 +25,7 @@ import { Link } from 'react-router-dom';
 export const Topbar: React.FC = () => {
   const { user, logout, switchPersona, refreshProfile } = useAuth();
   const { success, error } = useToast();
+  const { isConnected } = useRealtime();
 
   const [demoUsers, setDemoUsers] = useState<any[]>([]);
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
@@ -53,9 +55,30 @@ export const Topbar: React.FC = () => {
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 15000);
+    const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // Real-time instant notification and financial sync
+  useRealtimeEvent('NOTIFICATION', (data) => {
+    loadNotifications();
+    if (data?.title) {
+      success(data.title, data.message);
+    }
+  });
+
+  useRealtimeEvent('NOTIFICATION_READ', () => {
+    loadNotifications();
+  });
+
+  useRealtimeEvent('WALLET_UPDATED', () => {
+    refreshProfile();
+  });
+
+  useRealtimeEvent('RENTAL_UPDATED', () => {
+    refreshProfile();
+    loadNotifications();
+  });
 
   const handleDeposit = async () => {
     const amt = parseFloat(depositAmount);
@@ -116,6 +139,23 @@ export const Topbar: React.FC = () => {
       <div className="flex items-center gap-3">
         {user ? (
           <>
+            {/* Live Realtime Indicator */}
+            <div
+              className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                isConnected
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-700'
+              }`}
+              title={isConnected ? 'Connected to BorrowLab Realtime SSE stream' : 'Connecting to Realtime stream...'}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isConnected ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-amber-400'
+                }`}
+              />
+              <span>{isConnected ? 'Real-Time' : 'Connecting'}</span>
+            </div>
+
             {/* Student Trust Chip */}
             <div className="hidden md:block">
               <TrustGauge score={user.trustScore} size="sm" />

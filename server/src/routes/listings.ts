@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, optionalAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -253,6 +254,8 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       return newListing;
     });
 
+    realtime.broadcast('LISTING_UPDATED', listing);
+
     res.status(201).json({ listing });
   } catch (err: any) {
     if (err.code === '23505') {
@@ -320,6 +323,8 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
     );
 
     await logAudit(query, req.user!.userId, 'UPDATE', 'listings', Number(req.params.id), current, result.rows[0]);
+
+    realtime.broadcast('LISTING_UPDATED', result.rows[0]);
 
     res.json({ listing: result.rows[0] });
   } catch (err: any) {

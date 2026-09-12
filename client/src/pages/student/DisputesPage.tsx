@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { useToast } from '../../context/ToastContext';
 import { Dispute, Rental } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -84,6 +85,27 @@ export const DisputesPage: React.FC = () => {
       setIsCreateModalOpen(true);
     }
   }, [rentalIdFromQuery]);
+
+  // Real-time live dispute chat updates without page reload
+  useRealtimeEvent('DISPUTE_MESSAGE', (message: any) => {
+    setSelectedDispute((prev) => {
+      if (!prev || Number(prev.dispute_id) !== Number(message?.dispute_id)) return prev;
+      const exists = prev.messages?.some((m) => Number(m.message_id) === Number(message?.message_id));
+      if (exists) return prev;
+      return {
+        ...prev,
+        messages: [...(prev.messages || []), message],
+      };
+    });
+  });
+
+  // Real-time status / ruling updates
+  useRealtimeEvent(['DISPUTE_UPDATED', 'DISPUTE_RESOLVED'], (data: any) => {
+    fetchDisputes();
+    if (selectedDispute && Number(selectedDispute.dispute_id) === Number(data?.dispute_id)) {
+      loadDisputeDetail(Number(data.dispute_id));
+    }
+  });
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

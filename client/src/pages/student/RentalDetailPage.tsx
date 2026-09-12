@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/Badge';
@@ -25,6 +26,13 @@ export const RentalDetailPage: React.FC = () => {
   const [rental, setRental] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const loadRental = () => {
+    if (!id) return;
+    api.getRentalDetail(id)
+      .then((res) => setRental(res.rental))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     if (!id) return;
     setIsLoading(true);
@@ -33,6 +41,12 @@ export const RentalDetailPage: React.FC = () => {
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  useRealtimeEvent(['RENTAL_UPDATED', 'DISPUTE_UPDATED', 'WALLET_UPDATED'], (data: any) => {
+    if (!data?.rental_id || Number(data.rental_id) === Number(id)) {
+      loadRental();
+    }
+  });
 
   if (isLoading) {
     return <div className="h-96 bg-white rounded border border-slate-200 animate-pulse" />;

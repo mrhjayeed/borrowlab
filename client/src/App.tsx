@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { RealtimeProvider } from './context/RealtimeContext';
 import { ToastProvider } from './context/ToastContext';
 import { PublicLayout } from './layouts/PublicLayout';
 import { AuthenticatedLayout } from './layouts/AuthenticatedLayout';
@@ -76,8 +77,9 @@ export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ToastProvider>
-          <BrowserRouter>
+        <RealtimeProvider>
+          <ToastProvider>
+            <BrowserRouter>
             <Routes>
               {/* 1. PUBLIC MARKETING & AUTH ROUTES — Unauthenticated Public Shell without Sidebar */}
               <Route element={<PublicLayout />}>
@@ -224,8 +226,9 @@ export const App: React.FC = () => {
             </Routes>
           </BrowserRouter>
         </ToastProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+      </RealtimeProvider>
+    </AuthProvider>
+  </QueryClientProvider>
   );
 };
 

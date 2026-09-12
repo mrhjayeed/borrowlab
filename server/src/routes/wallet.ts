@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -88,6 +89,8 @@ router.post('/deposit', authenticateToken, async (req: AuthenticatedRequest, res
         transaction: txRes.rows[0],
       };
     });
+
+    realtime.sendToUser(req.user!.userId, 'WALLET_UPDATED', result);
 
     res.json({ message: 'Deposit successful', result });
   } catch (err: any) {

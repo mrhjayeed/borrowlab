@@ -19,6 +19,7 @@ import notificationsRouter from './routes/notifications.js';
 import maintenanceRouter from './routes/maintenance.js';
 import adminRouter from './routes/admin.js';
 import uploadRouter from './routes/upload.js';
+import eventsRouter from './routes/events.js';
 import { query } from './config/db.js';
 import path from 'path';
 import fs from 'fs';
@@ -79,6 +80,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/maintenance', maintenanceRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/events', eventsRouter);
 
 // Global Error Handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

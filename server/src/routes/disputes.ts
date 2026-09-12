@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -252,6 +253,18 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       return newDispute;
     });
 
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'DISPUTE_UPDATED', dispute);
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+      rental_id: rental.rental_id,
+      status: 'DISPUTED',
+    });
+    realtime.sendToUser(againstUserId, 'NOTIFICATION', {
+      title: 'Dispute Opened',
+      message: `${req.user!.fullName} opened a dispute regarding Rental #${rental.rental_id}`,
+      related_dispute_id: dispute.dispute_id,
+    });
+    realtime.broadcast('DISPUTE_UPDATED', dispute);
+
     res.status(201).json({ dispute });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -295,6 +308,20 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
       [dispute.dispute_id, req.user!.userId, parsed.data.message]
     );
 
+    const messagePayload = {
+      message_id: msgRes.rows[0].message_id,
+      dispute_id: dispute.dispute_id,
+      sender_id: req.user!.userId,
+      sender_name: req.user!.fullName,
+      sender_roles: req.user!.roles || [],
+      message: parsed.data.message,
+      created_at: msgRes.rows[0].created_at,
+    };
+
+    // Real-time broadcast to participants and watching moderators
+    realtime.sendToUsers([dispute.opened_by, dispute.against_user_id], 'DISPUTE_MESSAGE', messagePayload);
+    realtime.broadcast('DISPUTE_MESSAGE', messagePayload);
+
     // Notify recipient
     const recipientId =
       Number(req.user!.userId) === Number(dispute.opened_by)
@@ -311,7 +338,13 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
       ]
     );
 
-    res.status(201).json({ message: msgRes.rows[0] });
+    realtime.sendToUser(recipientId, 'NOTIFICATION', {
+      title: 'New Dispute Message',
+      message: `New message in Dispute #${dispute.dispute_id} from ${req.user!.fullName}`,
+      related_dispute_id: dispute.dispute_id,
+    });
+
+    res.status(201).json({ message: messagePayload });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -475,8 +508,17 @@ router.post('/:id/resolve', authenticateToken, requireRole(['ADMIN', 'MODERATOR'
 
       await logAudit(client, req.user!.userId, 'DISPUTE_ACTION', 'disputes', dispute.dispute_id, dispute, updatedDispute.rows[0]);
 
-      return updatedDispute.rows[0];
+      return {
+        ...updatedDispute.rows[0],
+        borrower_id: rental.borrower_id,
+        owner_id: rental.owner_id,
+      };
     });
+
+    realtime.sendToUsers([result.borrower_id, result.owner_id], 'DISPUTE_RESOLVED', result);
+    realtime.sendToUsers([result.borrower_id, result.owner_id], 'WALLET_UPDATED', { dispute_id: result.dispute_id });
+    realtime.sendToUsers([result.borrower_id, result.owner_id], 'RENTAL_UPDATED', { rental_id: result.rental_id });
+    realtime.broadcast('DISPUTE_UPDATED', result);
 
     res.json({ message: 'Dispute resolved and escrow settlement executed', dispute: result });
   } catch (err: any) {

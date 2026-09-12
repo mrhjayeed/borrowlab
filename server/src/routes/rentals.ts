@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -323,6 +324,18 @@ router.post('/request', authenticateToken, async (req: AuthenticatedRequest, res
       return newRental;
     });
 
+    realtime.sendToUsers([listing.owner_id, req.user!.userId], 'RENTAL_UPDATED', {
+      rental_id: rental.rental_id,
+      status: rental.status,
+      listing_id: rental.listing_id,
+    });
+    realtime.sendToUser(listing.owner_id, 'NOTIFICATION', {
+      title: 'New Rental Request Received',
+      message: `${req.user!.fullName} requested to borrow '${listing.listing_title}'`,
+      related_rental_id: rental.rental_id,
+    });
+    realtime.broadcast('LISTING_UPDATED', { listing_id: rental.listing_id });
+
     res.status(201).json({ rental });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -372,6 +385,17 @@ router.post('/:id/approve', authenticateToken, async (req: AuthenticatedRequest,
       return result.rows[0];
     });
 
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+      rental_id: updated.rental_id,
+      status: updated.status,
+      listing_id: updated.listing_id,
+    });
+    realtime.sendToUser(rental.borrower_id, 'NOTIFICATION', {
+      title: 'Rental Request Approved',
+      message: 'Your rental request was approved. Complete payment to activate.',
+      related_rental_id: updated.rental_id,
+    });
+
     res.json({ rental: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -406,18 +430,30 @@ router.post('/:id/reject', authenticateToken, async (req: AuthenticatedRequest, 
 
       await client.query(
         `INSERT INTO rental_status_history (rental_id, old_status, new_status, changed_by, reason)
-         VALUES ($1, 'REQUESTED', 'CANCELLED', $2, 'Owner rejected request')`,
+        VALUES ($1, 'REQUESTED', 'CANCELLED', $2, 'Owner rejected request')`,
         [rental.rental_id, req.user!.userId]
       );
 
       await client.query(
         `INSERT INTO notifications (user_id, notification_type, title, message, related_rental_id)
-         VALUES ($1, 'RENTAL_REJECTED', 'Rental Request Rejected', 'Your rental request was declined by the owner.', $2)`,
+        VALUES ($1, 'RENTAL_REJECTED', 'Rental Request Rejected', 'Your rental request was declined by the owner.', $2)`,
         [rental.borrower_id, rental.rental_id]
       );
 
       return result.rows[0];
     });
+
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+      rental_id: updated.rental_id,
+      status: updated.status,
+      listing_id: updated.listing_id,
+    });
+    realtime.sendToUser(rental.borrower_id, 'NOTIFICATION', {
+      title: 'Rental Request Rejected',
+      message: 'Your rental request was declined by the owner.',
+      related_rental_id: updated.rental_id,
+    });
+    realtime.broadcast('LISTING_UPDATED', { listing_id: updated.listing_id });
 
     res.json({ rental: updated });
   } catch (err: any) {
@@ -595,6 +631,27 @@ router.post('/:id/activate', authenticateToken, async (req: AuthenticatedRequest
       return updatedRentalRes.rows[0];
     });
 
+    realtime.sendToUsers([activatedRental.borrower_id, activatedRental.owner_id], 'RENTAL_UPDATED', {
+      rental_id: activatedRental.rental_id,
+      status: activatedRental.status,
+      listing_id: activatedRental.listing_id,
+    });
+    realtime.sendToUser(activatedRental.borrower_id, 'WALLET_UPDATED', {
+      user_id: activatedRental.borrower_id,
+      rental_id: activatedRental.rental_id,
+    });
+    realtime.sendToUser(activatedRental.borrower_id, 'NOTIFICATION', {
+      title: 'Rental Activated',
+      message: 'Your rental is now active. Enjoy using the hardware!',
+      related_rental_id: activatedRental.rental_id,
+    });
+    realtime.sendToUser(activatedRental.owner_id, 'NOTIFICATION', {
+      title: 'Hardware Handover Active',
+      message: 'Rental fee and deposit have been secured in escrow.',
+      related_rental_id: activatedRental.rental_id,
+    });
+    realtime.broadcast('LISTING_UPDATED', { listing_id: activatedRental.listing_id });
+
     res.json({ message: 'Rental activated successfully', rental: activatedRental });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -641,6 +698,17 @@ router.post('/:id/request-return', authenticateToken, async (req: AuthenticatedR
       );
 
       return result.rows[0];
+    });
+
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+      rental_id: updated.rental_id,
+      status: updated.status,
+      listing_id: updated.listing_id,
+    });
+    realtime.sendToUser(rental.owner_id, 'NOTIFICATION', {
+      title: 'Hardware Return Pending Inspection',
+      message: 'Borrower initiated return. Please inspect condition and confirm.',
+      related_rental_id: updated.rental_id,
     });
 
     res.json({ rental: updated });
@@ -822,7 +890,15 @@ router.post('/:id/confirm-return', authenticateToken, async (req: AuthenticatedR
           [rental.borrower_id, rental.owner_id, rental.rental_id, disputeId]
         );
 
-        return { rentalId: rental.rental_id, status: 'DISPUTED', damageReportId: dmgRes.rows[0].damage_report_id, disputeId };
+        return {
+          rentalId: rental.rental_id,
+          status: 'DISPUTED',
+          damageReportId: dmgRes.rows[0].damage_report_id,
+          disputeId,
+          borrowerId: rental.borrower_id,
+          ownerId: rental.owner_id,
+          listingId: rental.listing_id,
+        };
       } else {
         // CLEAN RETURN WORKFLOW:
         // 1. Release rental fee to owner's wallet
@@ -965,9 +1041,36 @@ router.post('/:id/confirm-return', authenticateToken, async (req: AuthenticatedR
           [rental.borrower_id, rental.owner_id, rental.rental_id]
         );
 
-        return { rentalId: rental.rental_id, status: 'COMPLETED' };
+        return {
+          rentalId: rental.rental_id,
+          status: 'COMPLETED',
+          borrowerId: rental.borrower_id,
+          ownerId: rental.owner_id,
+          listingId: rental.listing_id,
+        };
       }
     });
+
+    if (result.status === 'DISPUTED') {
+      realtime.sendToUsers([result.borrowerId, result.ownerId], 'RENTAL_UPDATED', {
+        rental_id: result.rentalId,
+        status: 'DISPUTED',
+      });
+      realtime.sendToUsers([result.borrowerId, result.ownerId], 'DISPUTE_UPDATED', {
+        dispute_id: (result as any).disputeId,
+        rental_id: result.rentalId,
+      });
+      realtime.broadcast('DISPUTE_UPDATED', { dispute_id: (result as any).disputeId });
+    } else {
+      realtime.sendToUsers([result.borrowerId, result.ownerId], 'RENTAL_UPDATED', {
+        rental_id: result.rentalId,
+        status: 'COMPLETED',
+      });
+      realtime.sendToUsers([result.borrowerId, result.ownerId], 'WALLET_UPDATED', {
+        rental_id: result.rentalId,
+      });
+      realtime.broadcast('LISTING_UPDATED', { listing_id: result.listingId });
+    }
 
     res.json({ message: 'Return confirmed successfully', result });
   } catch (err: any) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { useToast } from '../../context/ToastContext';
 import { InventoryItem, ComponentCatalog } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -114,6 +115,10 @@ export const MyHardwarePage: React.FC = () => {
     fetchInventory();
     api.getComponents().then((res) => setCatalogComponents(res.components)).catch(() => {});
   }, []);
+
+  useRealtimeEvent(['INVENTORY_UPDATED', 'RENTAL_UPDATED'], () => {
+    fetchInventory();
+  });
 
   const handleAddAccessoryRow = () => {
     setAccessories([...accessories, { accessory_name: '', quantity: 1, replacement_value: 0, is_required: false }]);

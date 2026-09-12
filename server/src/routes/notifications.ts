@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { query } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -47,6 +48,8 @@ router.put('/:id/read', authenticateToken, async (req: AuthenticatedRequest, res
       return;
     }
 
+    realtime.sendToUser(req.user!.userId, 'NOTIFICATION_READ', { notification_id: req.params.id });
+
     res.json({ notification: result.rows[0] });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -62,6 +65,8 @@ router.put('/read-all', authenticateToken, async (req: AuthenticatedRequest, res
        WHERE user_id = $1 AND is_read = false`,
       [req.user!.userId]
     );
+
+    realtime.sendToUser(req.user!.userId, 'NOTIFICATION_READ', { all: true });
 
     res.json({ message: 'All notifications marked as read' });
   } catch (err: any) {

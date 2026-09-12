@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { useToast } from '../../context/ToastContext';
 import { ListingAvailabilityItem, InventoryItem } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -66,6 +67,10 @@ export const MyListingsPage: React.FC = () => {
       setIsCreateModalOpen(true);
     }
   }, [preselectedInventoryId]);
+
+  useRealtimeEvent(['LISTING_UPDATED', 'INVENTORY_UPDATED', 'RENTAL_UPDATED'], () => {
+    fetchListingsData();
+  });
 
   const handleToggleStatus = async (listingId: number, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { useToast } from '../../context/ToastContext';
 import { Rental } from '../../types';
 import { Card } from '../../components/ui/Card';
@@ -62,6 +63,10 @@ export const RentalsPage: React.FC = () => {
   useEffect(() => {
     fetchRentals();
   }, [activeTab]);
+
+  useRealtimeEvent(['RENTAL_UPDATED', 'WALLET_UPDATED'], () => {
+    fetchRentals();
+  });
 
   const handleApprove = async (rentalId: number) => {
     try {

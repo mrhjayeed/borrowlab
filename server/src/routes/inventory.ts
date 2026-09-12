@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { realtime } from '../services/realtime.js';
 
 const router = Router();
 
@@ -198,6 +199,8 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       return newInv;
     });
 
+    realtime.sendToUser(req.user!.userId, 'INVENTORY_UPDATED', item);
+
     res.status(201).json({ item });
   } catch (err: any) {
     if (err.code === '23505') {
@@ -264,6 +267,8 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
     );
 
     await logAudit(query, req.user!.userId, 'UPDATE', 'inventory', Number(req.params.id), item, result.rows[0]);
+
+    realtime.sendToUser(req.user!.userId, 'INVENTORY_UPDATED', result.rows[0]);
 
     res.json({ item: result.rows[0] });
   } catch (err: any) {
