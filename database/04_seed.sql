@@ -179,11 +179,6 @@ INSERT INTO rental_status_history (rental_id, old_status, new_status, changed_by
 (1, 'RETURN_PENDING', 'RETURNED', 3, 'Owner inspected and accepted hardware', '2024-01-18 16:30:00'),
 (1, 'RETURNED', 'COMPLETED', 3, 'Escrow released and rental marked completed', '2024-01-18 16:35:00');
 
--- Return record for Rental 1 & Rental 3
-INSERT INTO returns (return_id, rental_id, received_by, returned_at, condition_after_return, damage_found, missing_accessories, return_notes, owner_confirmed, confirmed_at) VALUES
-(1, 1, 3, '2024-01-18 16:30:00', 'EXCELLENT', false, false, 'Hardware returned in exact same condition. All switches operational.', true, '2024-01-18 16:35:00'),
-(2, 3, 6, NOW() - INTERVAL '1 day', 'DAMAGED', true, false, 'USB UART daughterboard connector was cracked and loose upon handover.', true, NOW() - INTERVAL '1 day');
-
 -- Escrow for Rental 1 (RELEASED)
 INSERT INTO escrows (escrow_id, rental_id, borrower_id, owner_id, original_amount, held_amount, released_amount, deducted_amount, status, locked_at, released_at) VALUES
 (1, 1, 5, 3, 3000.00, 0.00, 3000.00, 0.00, 'RELEASED', '2024-01-11 09:30:00', '2024-01-18 16:35:00');
@@ -215,6 +210,28 @@ INSERT INTO rental_status_history (rental_id, old_status, new_status, changed_by
 -- Escrow for Rental 3 (FROZEN)
 INSERT INTO escrows (escrow_id, rental_id, borrower_id, owner_id, original_amount, held_amount, released_amount, deducted_amount, status, locked_at) VALUES
 (3, 3, 4, 6, 4000.00, 4000.00, 0.00, 0.00, 'FROZEN', NOW() - INTERVAL '9 days');
+
+-- Rental 4: COMPLETED (Jetson Orin Nano rented by Marcus from Tanzim; completed and ready for unreviewed testing)
+INSERT INTO rentals (rental_id, listing_id, inventory_id, owner_id, borrower_id, requested_at, approved_at, start_date, due_date, returned_at, weekly_rent, rental_fee, security_deposit, late_penalty, status, borrower_condition_notes, owner_condition_notes) VALUES
+(4, 3, 3, 3, 8, NOW() - INTERVAL '14 days', NOW() - INTERVAL '13 days', CURRENT_DATE - 13, CURRENT_DATE - 3, NOW() - INTERVAL '3 days', 1400.00, 1400.00, 5000.00, 0.00, 'COMPLETED', 'Hardware collected with original power supply and NVMe.', 'Returned on time in spotless working order.');
+
+INSERT INTO rental_status_history (rental_id, old_status, new_status, changed_by, reason, changed_at) VALUES
+(4, NULL, 'REQUESTED', 8, 'Requested for AI capstone project training', NOW() - INTERVAL '14 days'),
+(4, 'REQUESTED', 'APPROVED', 3, 'Owner approved request', NOW() - INTERVAL '13 days'),
+(4, 'APPROVED', 'ACTIVE', 8, 'Deposit locked and Jetson collected', NOW() - INTERVAL '13 days'),
+(4, 'ACTIVE', 'RETURN_PENDING', 8, 'Borrower returned kit to owner', NOW() - INTERVAL '3 days'),
+(4, 'RETURN_PENDING', 'RETURNED', 3, 'Owner verified hardware operation', NOW() - INTERVAL '3 days'),
+(4, 'RETURNED', 'COMPLETED', 3, 'Escrow settled and rental marked completed', NOW() - INTERVAL '3 days');
+
+-- Escrow for Rental 4 (RELEASED)
+INSERT INTO escrows (escrow_id, rental_id, borrower_id, owner_id, original_amount, held_amount, released_amount, deducted_amount, status, locked_at, released_at) VALUES
+(4, 4, 8, 3, 5000.00, 0.00, 5000.00, 0.00, 'RELEASED', NOW() - INTERVAL '13 days', NOW() - INTERVAL '3 days');
+
+-- Return records (inserted after rentals 1-4 exist)
+INSERT INTO returns (return_id, rental_id, received_by, returned_at, condition_after_return, damage_found, missing_accessories, return_notes, owner_confirmed, confirmed_at) VALUES
+(1, 1, 3, '2024-01-18 16:30:00', 'EXCELLENT', false, false, 'Hardware returned in exact same condition. All switches operational.', true, '2024-01-18 16:35:00'),
+(2, 3, 6, NOW() - INTERVAL '1 day', 'DAMAGED', true, false, 'USB UART daughterboard connector was cracked and loose upon handover.', true, NOW() - INTERVAL '1 day'),
+(3, 4, 3, NOW() - INTERVAL '3 days', 'EXCELLENT', false, false, 'Jetson Orin Nano returned in pristine condition with all accessories.', true, NOW() - INTERVAL '3 days');
 
 -- Damage report for Rental 3
 INSERT INTO damage_reports (damage_report_id, rental_id, inventory_id, reported_by, damage_type, description, estimated_cost, approved_cost, status, reported_at) VALUES
@@ -254,6 +271,18 @@ INSERT INTO wallet_transactions (wallet_transaction_id, wallet_id, rental_id, es
 
 INSERT INTO escrow_transactions (escrow_transaction_id, escrow_id, transaction_type, amount, performed_by, reference_code, description, created_at) VALUES
 (3, 2, 'ESCROW_LOCK', 3000.00, 6, 'ETX-LOCK-002', 'Locked security deposit for active rental', NOW() - INTERVAL '2 days');
+
+-- Seed transactions for Rental 4
+INSERT INTO wallet_transactions (wallet_transaction_id, wallet_id, rental_id, escrow_id, transaction_type, amount, status, reference_code, description, created_at, completed_at) VALUES
+(10, 8, 4, NULL, 'RENTAL_PAYMENT', 1400.00, 'COMPLETED', 'TX-RENT-PAY-004', 'Rental payment for Jetson Orin Nano', NOW() - INTERVAL '13 days', NOW() - INTERVAL '13 days'),
+(11, 8, 4, 4, 'ESCROW_LOCK', 5000.00, 'COMPLETED', 'TX-ESC-LOCK-004', 'Security deposit lock for Jetson Orin Nano', NOW() - INTERVAL '13 days', NOW() - INTERVAL '13 days'),
+(12, 8, 4, 4, 'ESCROW_RELEASE', 5000.00, 'COMPLETED', 'TX-ESC-REL-004', 'Security deposit refund after successful return', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
+(13, 3, 4, NULL, 'OWNER_EARNING', 1400.00, 'COMPLETED', 'TX-OWNER-EARN-004', 'Rental payout for Jetson Orin Nano', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days');
+
+INSERT INTO escrow_transactions (escrow_transaction_id, escrow_id, transaction_type, amount, performed_by, reference_code, description, created_at) VALUES
+(4, 4, 'ESCROW_LOCK', 5000.00, 8, 'ETX-LOCK-004', 'Locked security deposit into escrow', NOW() - INTERVAL '13 days'),
+(5, 4, 'ESCROW_RELEASE', 5000.00, 3, 'ETX-REL-004', 'Released security deposit back to borrower', NOW() - INTERVAL '3 days');
+
 
 -- Seed deposit simulation transactions
 INSERT INTO wallet_transactions (wallet_transaction_id, wallet_id, rental_id, escrow_id, transaction_type, amount, status, reference_code, description, created_at, completed_at) VALUES
@@ -306,30 +335,30 @@ INSERT INTO maintenance_records (maintenance_id, inventory_id, reported_by, main
 (1, 7, 4, 'Calibration & Potentiometer Fix', 'Periodic calibration of channel 2 current regulator. Potentiometer cleaned with contact cleaner.', 800.00, NOW() - INTERVAL '5 days', NULL, 'Awaiting final bench test.');
 
 -- Reset sequence values so future inserts don't collide
-SELECT setval('universities_university_id_seq', (SELECT MAX(university_id) FROM universities));
-SELECT setval('departments_department_id_seq', (SELECT MAX(department_id) FROM departments));
-SELECT setval('roles_role_id_seq', (SELECT MAX(role_id) FROM roles));
-SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM users));
-SELECT setval('wallets_wallet_id_seq', (SELECT MAX(wallet_id) FROM wallets));
-SELECT setval('component_categories_category_id_seq', (SELECT MAX(category_id) FROM component_categories));
-SELECT setval('component_catalog_component_id_seq', (SELECT MAX(component_id) FROM component_catalog));
-SELECT setval('inventory_inventory_id_seq', (SELECT MAX(inventory_id) FROM inventory));
-SELECT setval('inventory_accessories_accessory_id_seq', (SELECT MAX(accessory_id) FROM inventory_accessories));
-SELECT setval('listings_listing_id_seq', (SELECT MAX(listing_id) FROM listings));
-SELECT setval('listing_images_listing_image_id_seq', (SELECT MAX(listing_image_id) FROM listing_images));
-SELECT setval('reservations_reservation_id_seq', (SELECT MAX(reservation_id) FROM reservations));
-SELECT setval('rentals_rental_id_seq', (SELECT MAX(rental_id) FROM rentals));
-SELECT setval('rental_status_history_history_id_seq', (SELECT MAX(history_id) FROM rental_status_history));
-SELECT setval('returns_return_id_seq', (SELECT MAX(return_id) FROM returns));
-SELECT setval('escrows_escrow_id_seq', (SELECT MAX(escrow_id) FROM escrows));
-SELECT setval('wallet_transactions_wallet_transaction_id_seq', (SELECT MAX(wallet_transaction_id) FROM wallet_transactions));
-SELECT setval('escrow_transactions_escrow_transaction_id_seq', (SELECT MAX(escrow_transaction_id) FROM escrow_transactions));
-SELECT setval('damage_reports_damage_report_id_seq', (SELECT MAX(damage_report_id) FROM damage_reports));
-SELECT setval('damage_evidence_evidence_id_seq', (SELECT MAX(evidence_id) FROM damage_evidence));
-SELECT setval('disputes_dispute_id_seq', (SELECT MAX(dispute_id) FROM disputes));
-SELECT setval('dispute_messages_message_id_seq', (SELECT MAX(message_id) FROM dispute_messages));
-SELECT setval('waitlist_waitlist_id_seq', (SELECT MAX(waitlist_id) FROM waitlist));
-SELECT setval('reviews_review_id_seq', (SELECT MAX(review_id) FROM reviews));
-SELECT setval('notifications_notification_id_seq', (SELECT MAX(notification_id) FROM notifications));
-SELECT setval('audit_logs_audit_log_id_seq', (SELECT MAX(audit_log_id) FROM audit_logs));
-SELECT setval('maintenance_records_maintenance_id_seq', (SELECT MAX(maintenance_id) FROM maintenance_records));
+SELECT setval('universities_university_id_seq', COALESCE((SELECT MAX(university_id) FROM universities), 1));
+SELECT setval('departments_department_id_seq', COALESCE((SELECT MAX(department_id) FROM departments), 1));
+SELECT setval('roles_role_id_seq', COALESCE((SELECT MAX(role_id) FROM roles), 1));
+SELECT setval('users_user_id_seq', COALESCE((SELECT MAX(user_id) FROM users), 1));
+SELECT setval('wallets_wallet_id_seq', COALESCE((SELECT MAX(wallet_id) FROM wallets), 1));
+SELECT setval('component_categories_category_id_seq', COALESCE((SELECT MAX(category_id) FROM component_categories), 1));
+SELECT setval('component_catalog_component_id_seq', COALESCE((SELECT MAX(component_id) FROM component_catalog), 1));
+SELECT setval('inventory_inventory_id_seq', COALESCE((SELECT MAX(inventory_id) FROM inventory), 1));
+SELECT setval('inventory_accessories_accessory_id_seq', COALESCE((SELECT MAX(accessory_id) FROM inventory_accessories), 1));
+SELECT setval('listings_listing_id_seq', COALESCE((SELECT MAX(listing_id) FROM listings), 1));
+SELECT setval('listing_images_listing_image_id_seq', COALESCE((SELECT MAX(listing_image_id) FROM listing_images), 1));
+SELECT setval('reservations_reservation_id_seq', COALESCE((SELECT MAX(reservation_id) FROM reservations), 1));
+SELECT setval('rentals_rental_id_seq', COALESCE((SELECT MAX(rental_id) FROM rentals), 1));
+SELECT setval('rental_status_history_history_id_seq', COALESCE((SELECT MAX(history_id) FROM rental_status_history), 1));
+SELECT setval('returns_return_id_seq', COALESCE((SELECT MAX(return_id) FROM returns), 1));
+SELECT setval('escrows_escrow_id_seq', COALESCE((SELECT MAX(escrow_id) FROM escrows), 1));
+SELECT setval('wallet_transactions_wallet_transaction_id_seq', COALESCE((SELECT MAX(wallet_transaction_id) FROM wallet_transactions), 1));
+SELECT setval('escrow_transactions_escrow_transaction_id_seq', COALESCE((SELECT MAX(escrow_transaction_id) FROM escrow_transactions), 1));
+SELECT setval('damage_reports_damage_report_id_seq', COALESCE((SELECT MAX(damage_report_id) FROM damage_reports), 1));
+SELECT setval('damage_evidence_evidence_id_seq', COALESCE((SELECT MAX(evidence_id) FROM damage_evidence), 1));
+SELECT setval('disputes_dispute_id_seq', COALESCE((SELECT MAX(dispute_id) FROM disputes), 1));
+SELECT setval('dispute_messages_message_id_seq', COALESCE((SELECT MAX(message_id) FROM dispute_messages), 1));
+SELECT setval('waitlist_waitlist_id_seq', COALESCE((SELECT MAX(waitlist_id) FROM waitlist), 1));
+SELECT setval('reviews_review_id_seq', COALESCE((SELECT MAX(review_id) FROM reviews), 1));
+SELECT setval('notifications_notification_id_seq', COALESCE((SELECT MAX(notification_id) FROM notifications), 1));
+SELECT setval('audit_logs_audit_log_id_seq', COALESCE((SELECT MAX(audit_log_id) FROM audit_logs), 1));
+SELECT setval('maintenance_records_maintenance_id_seq', COALESCE((SELECT MAX(maintenance_id) FROM maintenance_records), 1));
