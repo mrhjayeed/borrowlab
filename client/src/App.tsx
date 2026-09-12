@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { PublicLayout } from './layouts/PublicLayout';
 import { AuthenticatedLayout } from './layouts/AuthenticatedLayout';
+import { AdaptiveDiscoveryLayout } from './layouts/AdaptiveDiscoveryLayout';
 
 // Public Marketing & Discovery Pages
 import { LandingPage } from './pages/public/LandingPage';
@@ -78,12 +79,9 @@ export const App: React.FC = () => {
         <ToastProvider>
           <BrowserRouter>
             <Routes>
-              {/* 1. PUBLIC MARKETING & DISCOVERY ROUTES — Rendered in PublicLayout without Sidebar */}
+              {/* 1. PUBLIC MARKETING & AUTH ROUTES — Unauthenticated Public Shell without Sidebar */}
               <Route element={<PublicLayout />}>
                 <Route path="/" element={<LandingPage />} />
-                <Route path="/browse" element={<BrowseHardwarePage />} />
-                <Route path="/categories" element={<CatalogCategoriesPage />} />
-                <Route path="/listings/:id" element={<HardwareDetailPage />} />
                 <Route path="/how-it-works" element={<HowItWorksPage />} />
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/faq" element={<FaqPage />} />
@@ -91,7 +89,14 @@ export const App: React.FC = () => {
                 <Route path="/register" element={<RegisterPage />} />
               </Route>
 
-              {/* 2. AUTHENTICATED OPERATIONAL SHELL — Rendered with Fixed Sidebar & Telemetry */}
+              {/* 2. DISCOVERY & CATALOG ROUTES — Adaptive: Authenticated Dashboard Shell for signed-in users, Public Shell for guests */}
+              <Route element={<AdaptiveDiscoveryLayout />}>
+                <Route path="/browse" element={<BrowseHardwarePage />} />
+                <Route path="/categories" element={<CatalogCategoriesPage />} />
+                <Route path="/listings/:id" element={<HardwareDetailPage />} />
+              </Route>
+
+              {/* 3. AUTHENTICATED OPERATIONAL SHELL — Rendered with Fixed Sidebar & Telemetry */}
               <Route element={<AuthenticatedLayout />}>
                 {/* Student Workspace */}
                 <Route
