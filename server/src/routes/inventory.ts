@@ -16,7 +16,7 @@ const accessorySchema = z.object({
 
 const createInventorySchema = z.object({
   component_id: z.number().int().positive(),
-  inventory_code: z.string().min(2).max(50),
+  inventory_code: z.string().max(50).optional(),
   serial_number: z.string().max(100).optional(),
   condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED']),
   replacement_value: z.number().positive(),
@@ -25,6 +25,14 @@ const createInventorySchema = z.object({
   current_location: z.string().max(255).optional(),
   image_url: z.string().optional().nullable(),
   accessories: z.array(accessorySchema).optional(),
+  listing: z.object({
+    weekly_rent: z.number().positive(),
+    minimum_duration_days: z.number().int().positive().default(1),
+    maximum_duration_days: z.number().int().positive().default(30),
+    listing_title: z.string().min(5).max(200).optional(),
+    description: z.string().optional(),
+    pickup_information: z.string().max(500).optional(),
+  }).optional(),
 });
 
 // GET /api/inventory/my
@@ -155,10 +163,18 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     current_location,
     image_url,
     accessories,
+    listing,
   } = parsed.data;
 
+  // Auto-generate asset code if not supplied by user
+  let finalCode = (inventory_code && inventory_code.trim()) || '';
+  if (!finalCode) {
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    finalCode = `BL-UIU-${randomSuffix}`;
+  }
+
   try {
-    const item = await withTransaction(async (client) => {
+    const result = await withTransaction(async (client) => {
       const invRes = await client.query(
         `INSERT INTO inventory (
           component_id, owner_id, inventory_code, serial_number, condition, replacement_value, purchase_date, description, current_location, image_url
@@ -167,7 +183,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
         [
           component_id,
           req.user!.userId,
-          inventory_code,
+          finalCode,
           serial_number || null,
           condition,
           replacement_value,
@@ -192,19 +208,67 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       }
 
       await logAudit(client, req.user!.userId, 'INSERT', 'inventory', newInv.inventory_id, null, {
-        code: inventory_code,
+        code: finalCode,
         component_id,
       });
 
-      return newInv;
+      let newListing = null;
+      if (listing) {
+        const compRes = await client.query(
+          'SELECT component_name, manufacturer, model FROM component_catalog WHERE component_id = $1',
+          [component_id]
+        );
+        const comp = compRes.rows[0];
+        const defaultTitle = comp
+          ? `${comp.manufacturer ? comp.manufacturer + ' ' : ''}${comp.model} (${comp.component_name})`.trim()
+          : `Hardware Unit ${finalCode}`;
+
+        const listRes = await client.query(
+          `INSERT INTO listings (
+            inventory_id, owner_id, weekly_rent, minimum_duration_days, maximum_duration_days,
+            listing_title, description, pickup_information, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVE')
+          RETURNING *`,
+          [
+            newInv.inventory_id,
+            req.user!.userId,
+            listing.weekly_rent,
+            listing.minimum_duration_days || 1,
+            listing.maximum_duration_days || 30,
+            listing.listing_title || defaultTitle,
+            listing.description || description || null,
+            listing.pickup_information || current_location || null,
+          ]
+        );
+
+        newListing = listRes.rows[0];
+
+        if (image_url) {
+          await client.query(
+            `INSERT INTO listing_images (listing_id, image_url, display_order)
+             VALUES ($1, $2, 1)`,
+            [newListing.listing_id, image_url]
+          );
+        }
+
+        await logAudit(client, req.user!.userId, 'INSERT', 'listings', newListing.listing_id, null, {
+          listing_title: newListing.listing_title,
+          weekly_rent: newListing.weekly_rent,
+        });
+      }
+
+      return { item: newInv, listing: newListing };
     });
 
-    realtime.sendToUser(req.user!.userId, 'INVENTORY_UPDATED', item);
+    realtime.sendToUser(req.user!.userId, 'INVENTORY_UPDATED', result.item);
+    if (result.listing) {
+      realtime.broadcast('LISTING_UPDATED', result.listing);
+    }
 
-    res.status(201).json({ item });
+    res.status(201).json({ item: result.item, listing: result.listing });
   } catch (err: any) {
     if (err.code === '23505') {
-      res.status(409).json({ error: 'Inventory code or Serial Number already exists' });
+      res.status(409).json({ error: 'Asset Code or Serial Number already exists' });
       return;
     }
     res.status(500).json({ error: err.message });

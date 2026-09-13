@@ -79,11 +79,28 @@ export const api = {
     return request<{ components: any[] }>(`/catalog/components?${q.toString()}`);
   },
   getComponentDetail: (id: number | string) => request<{ component: any }>(`/catalog/components/${id}`),
+  createComponent: (payload: {
+    category_id: number;
+    manufacturer?: string;
+    model: string;
+    component_name: string;
+    description?: string;
+    specifications?: string;
+    default_rental_period_days?: number;
+  }) => request<{ component: any }>('/catalog/components', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createCategory: (payload: { name: string; description?: string }) =>
+    request<{ category: any }>('/catalog/categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   // Inventory
   getMyInventory: () => request<{ inventory: any[] }>('/inventory/my'),
   getInventoryDetail: (id: number | string) => request<{ item: any }>(`/inventory/${id}`),
-  createInventory: (payload: any) => request<{ item: any }>('/inventory', {
+  createInventory: (payload: any) => request<{ item: any; listing?: any }>('/inventory', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),

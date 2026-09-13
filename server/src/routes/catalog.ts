@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { query } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
+import { logAudit } from '../middleware/audit.js';
 
 const router = Router();
 
@@ -28,8 +29,8 @@ router.get('/categories', async (_req, res) => {
   }
 });
 
-// POST /api/catalog/categories (Admin only)
-router.post('/categories', authenticateToken, requireRole(['ADMIN']), async (req: AuthenticatedRequest, res) => {
+// POST /api/catalog/categories
+router.post('/categories', authenticateToken, async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
     name: z.string().min(2).max(100),
     description: z.string().optional(),
@@ -52,6 +53,10 @@ router.post('/categories', authenticateToken, requireRole(['ADMIN']), async (req
 
     res.status(201).json({ category: result.rows[0] });
   } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(409).json({ error: 'A category with this name already exists' });
+      return;
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -131,8 +136,8 @@ router.get('/components/:id', async (req, res) => {
   }
 });
 
-// POST /api/catalog/components (Admin/Moderator)
-router.post('/components', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), async (req: AuthenticatedRequest, res) => {
+// POST /api/catalog/components (Open to all authenticated campus peers)
+router.post('/components', authenticateToken, async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
     category_id: z.number().int().positive(),
     manufacturer: z.string().max(100).optional(),
@@ -159,8 +164,39 @@ router.post('/components', authenticateToken, requireRole(['ADMIN', 'MODERATOR']
       [category_id, manufacturer || null, model, component_name, description || null, specifications || null, default_rental_period_days]
     );
 
-    res.status(201).json({ component: result.rows[0] });
+    const newComp = result.rows[0];
+
+    await logAudit(query, req.user!.userId, 'INSERT', 'component_catalog', newComp.component_id, null, {
+      component_name,
+      model,
+      manufacturer,
+    });
+
+    const fullCompRes = await query(
+      `SELECT 
+        c.component_id,
+        c.category_id,
+        cat.name AS category_name,
+        c.manufacturer,
+        c.model,
+        c.component_name,
+        c.description,
+        c.specifications,
+        c.default_rental_period_days,
+        0::bigint AS total_units,
+        0::bigint AS available_units
+       FROM component_catalog c
+       JOIN component_categories cat ON c.category_id = cat.category_id
+       WHERE c.component_id = $1`,
+      [newComp.component_id]
+    );
+
+    res.status(201).json({ component: fullCompRes.rows[0] || newComp });
   } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(409).json({ error: 'A component with this model or name already exists in the catalog' });
+      return;
+    }
     res.status(500).json({ error: err.message });
   }
 });
