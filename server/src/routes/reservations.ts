@@ -125,7 +125,7 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res: 
     }
 
     const resItem = checkRes.rows[0];
-    if (resItem.borrower_id !== req.user!.userId && !req.user!.roles.includes('ADMIN')) {
+    if (Number(resItem.borrower_id) !== Number(req.user!.userId) && !req.user!.roles.includes('ADMIN')) {
       res.status(403).json({ error: 'Unauthorized to cancel this reservation' });
       return;
     }

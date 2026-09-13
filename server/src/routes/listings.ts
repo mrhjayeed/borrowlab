@@ -199,7 +199,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     }
 
     const item = invRes.rows[0];
-    if (item.owner_id !== req.user!.userId) {
+    if (Number(item.owner_id) !== Number(req.user!.userId)) {
       res.status(403).json({ error: 'You can only create listings for hardware you own' });
       return;
     }
@@ -292,7 +292,7 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
     }
 
     const current = listRes.rows[0];
-    if (current.owner_id !== req.user!.userId && !req.user!.roles.includes('ADMIN')) {
+    if (Number(current.owner_id) !== Number(req.user!.userId) && !req.user!.roles.includes('ADMIN')) {
       res.status(403).json({ error: 'Unauthorized to update this listing' });
       return;
     }

@@ -82,7 +82,7 @@ router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res: 
       return;
     }
 
-    if (checkRes.rows[0].borrower_id !== req.user!.userId && !req.user!.roles.includes('ADMIN')) {
+    if (Number(checkRes.rows[0].borrower_id) !== Number(req.user!.userId) && !req.user!.roles.includes('ADMIN')) {
       res.status(403).json({ error: 'Unauthorized to cancel this waitlist entry' });
       return;
     }

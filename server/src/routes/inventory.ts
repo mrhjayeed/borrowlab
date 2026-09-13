@@ -237,7 +237,7 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
     }
 
     const item = checkRes.rows[0];
-    if (item.owner_id !== req.user!.userId && !req.user!.roles.includes('ADMIN')) {
+    if (Number(item.owner_id) !== Number(req.user!.userId) && !req.user!.roles.includes('ADMIN')) {
       res.status(403).json({ error: 'Only the owner or an administrator can update this item' });
       return;
     }

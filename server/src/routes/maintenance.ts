@@ -32,7 +32,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     }
 
     const item = invRes.rows[0];
-    const isOwner = item.owner_id === req.user!.userId;
+    const isOwner = Number(item.owner_id) === Number(req.user!.userId);
     const isStaff = req.user!.roles.some((r) => ['ADMIN', 'MODERATOR'].includes(r));
 
     if (!isOwner && !isStaff) {
@@ -86,7 +86,7 @@ router.put('/:id/complete', authenticateToken, async (req: AuthenticatedRequest,
     }
 
     const rec = checkRes.rows[0];
-    const isOwner = rec.owner_id === req.user!.userId;
+    const isOwner = Number(rec.owner_id) === Number(req.user!.userId);
     const isStaff = req.user!.roles.some((r) => ['ADMIN', 'MODERATOR'].includes(r));
 
     if (!isOwner && !isStaff) {

@@ -65,7 +65,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
 
     const escrow = escrowRes.rows[0];
     const isParticipant =
-      escrow.borrower_id === req.user!.userId || escrow.owner_id === req.user!.userId;
+      Number(escrow.borrower_id) === Number(req.user!.userId) || Number(escrow.owner_id) === Number(req.user!.userId);
     const isStaff = req.user!.roles.some((r) => ['ADMIN', 'MODERATOR'].includes(r));
 
     if (!isParticipant && !isStaff) {
