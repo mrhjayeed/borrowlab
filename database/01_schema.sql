@@ -394,6 +394,14 @@ CREATE TABLE rental_status_history (
   changed_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE rental_messages (
+  message_id BIGSERIAL PRIMARY KEY,
+  rental_id BIGINT NOT NULL REFERENCES rentals(rental_id) ON DELETE CASCADE,
+  sender_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- -------------------------------------------------------------
 -- RETURNS
 -- -------------------------------------------------------------

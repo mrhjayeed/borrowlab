@@ -95,5 +95,6 @@ CREATE INDEX idx_damage_reports_status ON damage_reports(status);
 CREATE INDEX idx_disputes_rental ON disputes(rental_id);
 CREATE INDEX idx_disputes_status_opened ON disputes(status, opened_at DESC);
 CREATE INDEX idx_dispute_messages_dispute_created ON dispute_messages(dispute_id, created_at ASC);
+CREATE INDEX idx_rental_messages_rental_created ON rental_messages(rental_id, created_at ASC);
 
 CREATE INDEX idx_maintenance_inventory_started ON maintenance_records(inventory_id, started_at DESC);

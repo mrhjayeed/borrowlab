@@ -249,6 +249,12 @@ INSERT INTO dispute_messages (message_id, dispute_id, sender_id, message, create
 (2, 1, 4, 'The connector felt somewhat loose during connection on day 1. I did not drop the board. Happy to let the moderator inspect.', NOW() - INTERVAL '16 hours'),
 (3, 1, 2, 'Moderator Note: I have reviewed the photo and the inventory accession notes. Inspecting repair cost with the lab technician.', NOW() - INTERVAL '10 hours');
 
+-- Direct Peer Communication Messages (Borrower & Lender Coordination)
+INSERT INTO rental_messages (message_id, rental_id, sender_id, message, created_at) VALUES
+(1, 2, 6, 'Hi Tanzim! I requested your Basys 3 board for our Digital Logic assignment. When is a good time to meet for pickup?', NOW() - INTERVAL '3 days'),
+(2, 2, 3, 'Hey Rafid! I will be at the Embedded Systems Lab 506 tomorrow between 11 AM and 2 PM. I verified the board with Vivado and packed the micro-USB cable.', NOW() - INTERVAL '2 days' - INTERVAL '22 hours'),
+(3, 2, 6, 'Awesome, I will drop by around 11:30 AM. Thanks!', NOW() - INTERVAL '2 days' - INTERVAL '20 hours');
+
 -- -------------------------------------------------------------
 -- 11. FINANCIAL LEDGER (WALLET TRANSACTIONS & ESCROW TRANSACTIONS)
 -- -------------------------------------------------------------
@@ -357,6 +363,7 @@ SELECT setval('damage_reports_damage_report_id_seq', COALESCE((SELECT MAX(damage
 SELECT setval('damage_evidence_evidence_id_seq', COALESCE((SELECT MAX(evidence_id) FROM damage_evidence), 1));
 SELECT setval('disputes_dispute_id_seq', COALESCE((SELECT MAX(dispute_id) FROM disputes), 1));
 SELECT setval('dispute_messages_message_id_seq', COALESCE((SELECT MAX(message_id) FROM dispute_messages), 1));
+SELECT setval('rental_messages_message_id_seq', COALESCE((SELECT MAX(message_id) FROM rental_messages), 1));
 SELECT setval('waitlist_waitlist_id_seq', COALESCE((SELECT MAX(waitlist_id) FROM waitlist), 1));
 SELECT setval('reviews_review_id_seq', COALESCE((SELECT MAX(review_id) FROM reviews), 1));
 SELECT setval('notifications_notification_id_seq', COALESCE((SELECT MAX(notification_id) FROM notifications), 1));

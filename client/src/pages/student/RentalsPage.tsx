@@ -21,6 +21,7 @@ import {
   Lock,
   ArrowRight,
   Star,
+  MessageSquare,
 } from 'lucide-react';
 
 export const RentalsPage: React.FC = () => {
@@ -274,6 +275,12 @@ export const RentalsPage: React.FC = () => {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link to={`/rentals/${rental.rental_id}`}>
                       <Button variant="outline" size="sm">Audit Details</Button>
+                    </Link>
+
+                    <Link to={`/rentals/${rental.rental_id}#chat`}>
+                      <Button variant="outline" size="sm" className="gap-1.5 text-slate-700 hover:text-[#4F46E5] hover:border-indigo-200">
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-500" /> Chat
+                      </Button>
                     </Link>
 
                     {/* Owner Approval Actions */}

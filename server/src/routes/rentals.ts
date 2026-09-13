@@ -225,6 +225,20 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
     const myReview = reviewsRes.rows.find((rev) => Number(rev.reviewer_id) === Number(req.user!.userId)) || null;
     const peerReview = reviewsRes.rows.find((rev) => Number(rev.reviewer_id) !== Number(req.user!.userId)) || null;
 
+    // Direct peer messages (handover & coordination)
+    const messagesRes = await query(
+      `SELECT m.*, u.full_name AS sender_name,
+        COALESCE(
+          (SELECT json_agg(r.role_name) FROM user_roles ur JOIN roles r ON ur.role_id = r.role_id WHERE ur.user_id = m.sender_id),
+          '[]'
+        ) AS sender_roles
+       FROM rental_messages m
+       JOIN users u ON m.sender_id = u.user_id
+       WHERE m.rental_id = $1
+       ORDER BY m.created_at ASC`,
+      [rental.rental_id]
+    );
+
     res.json({
       rental: {
         ...rental,
@@ -234,8 +248,138 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
         reviews: reviewsRes.rows,
         my_review: myReview,
         peer_review: peerReview,
+        messages: messagesRes.rows,
       },
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/rentals/:id/messages
+router.get('/:id/messages', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rentalRes = await query(
+      'SELECT rental_id, borrower_id, owner_id FROM rentals WHERE rental_id = $1',
+      [req.params.id]
+    );
+
+    if (rentalRes.rows.length === 0) {
+      res.status(404).json({ error: 'Rental not found' });
+      return;
+    }
+
+    const rental = rentalRes.rows[0];
+    const isParticipant =
+      Number(rental.owner_id) === Number(req.user!.userId) ||
+      Number(rental.borrower_id) === Number(req.user!.userId);
+    const isStaff = req.user!.roles.some((r) => ['ADMIN', 'MODERATOR'].includes(r));
+
+    if (!isParticipant && !isStaff) {
+      res.status(403).json({ error: 'Unauthorized to view messages for this rental' });
+      return;
+    }
+
+    const messagesRes = await query(
+      `SELECT m.*, u.full_name AS sender_name,
+        COALESCE(
+          (SELECT json_agg(r.role_name) FROM user_roles ur JOIN roles r ON ur.role_id = r.role_id WHERE ur.user_id = m.sender_id),
+          '[]'
+        ) AS sender_roles
+       FROM rental_messages m
+       JOIN users u ON m.sender_id = u.user_id
+       WHERE m.rental_id = $1
+       ORDER BY m.created_at ASC`,
+      [rental.rental_id]
+    );
+
+    res.json({ messages: messagesRes.rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/rentals/:id/messages
+router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const schema = z.object({
+    message: z.string().trim().min(1, 'Message cannot be empty').max(2000, 'Message cannot exceed 2000 characters'),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    return;
+  }
+
+  try {
+    const rentalRes = await query(
+      `SELECT r.*, c.component_name
+       FROM rentals r
+       JOIN inventory i ON r.inventory_id = i.inventory_id
+       JOIN component_catalog c ON i.component_id = c.component_id
+       WHERE r.rental_id = $1`,
+      [req.params.id]
+    );
+
+    if (rentalRes.rows.length === 0) {
+      res.status(404).json({ error: 'Rental not found' });
+      return;
+    }
+
+    const rental = rentalRes.rows[0];
+    const isBorrower = Number(rental.borrower_id) === Number(req.user!.userId);
+    const isOwner = Number(rental.owner_id) === Number(req.user!.userId);
+    const isStaff = req.user!.roles.some((r) => ['ADMIN', 'MODERATOR'].includes(r));
+
+    if (!isBorrower && !isOwner && !isStaff) {
+      res.status(403).json({ error: 'Unauthorized to post messages on this rental' });
+      return;
+    }
+
+    const msgRes = await query(
+      `INSERT INTO rental_messages (rental_id, sender_id, message)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [rental.rental_id, req.user!.userId, parsed.data.message]
+    );
+
+    const messagePayload = {
+      message_id: msgRes.rows[0].message_id,
+      rental_id: rental.rental_id,
+      sender_id: req.user!.userId,
+      sender_name: req.user!.fullName,
+      sender_roles: req.user!.roles || [],
+      message: parsed.data.message,
+      created_at: msgRes.rows[0].created_at,
+    };
+
+    // Real-time broadcast to both borrower and lender
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_MESSAGE', messagePayload);
+    realtime.broadcast('RENTAL_MESSAGE', messagePayload);
+
+    // Send notification to counterpart
+    const recipientId = isBorrower ? rental.owner_id : rental.borrower_id;
+    try {
+      await query(
+        `INSERT INTO notifications (user_id, notification_type, title, message, related_rental_id)
+         VALUES ($1, 'SYSTEM', 'New Rental Message', $2, $3)`,
+        [
+          recipientId,
+          `${req.user!.fullName} sent a message regarding Rental #${rental.rental_id} (${rental.component_name})`,
+          rental.rental_id,
+        ]
+      );
+
+      realtime.sendToUser(recipientId, 'NOTIFICATION', {
+        title: 'New Rental Message',
+        message: `${req.user!.fullName}: ${parsed.data.message.slice(0, 80)}`,
+        related_rental_id: rental.rental_id,
+      });
+    } catch (notifErr) {
+      console.error('Failed to dispatch notification for rental message:', notifErr);
+    }
+
+    res.status(201).json({ message: messagePayload });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

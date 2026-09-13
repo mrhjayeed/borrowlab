@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +21,9 @@ import {
   Cpu,
   ArrowRight,
   Star,
+  MessageSquare,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
 
 export const RentalDetailPage: React.FC = () => {
@@ -36,10 +39,21 @@ export const RentalDetailPage: React.FC = () => {
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
+  // Chat State
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const loadRental = () => {
     if (!id) return;
     api.getRentalDetail(id)
-      .then((res) => setRental(res.rental))
+      .then((res) => {
+        setRental(res.rental);
+        if (res.rental?.messages) {
+          setMessages(res.rental.messages);
+        }
+      })
       .catch(() => {});
   };
 
@@ -81,6 +95,39 @@ export const RentalDetailPage: React.FC = () => {
       loadRental();
     }
   });
+
+  useRealtimeEvent('RENTAL_MESSAGE', (message: any) => {
+    if (Number(message?.rental_id) === Number(id)) {
+      setMessages((prev) => {
+        if (prev.some((m) => Number(m.message_id) === Number(message.message_id))) return prev;
+        return [...prev, message];
+      });
+    }
+  });
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || isSendingMessage || !rental) return;
+
+    const text = newMessage.trim();
+    setIsSendingMessage(true);
+    try {
+      const res = await api.sendRentalMessage(rental.rental_id, text);
+      setNewMessage('');
+      setMessages((prev) => {
+        if (prev.some((m) => Number(m.message_id) === Number(res.message.message_id))) return prev;
+        return [...prev, res.message];
+      });
+    } catch (err: any) {
+      error(err.message || 'Failed to send message');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
 
   if (isLoading) {
     return <div className="h-96 bg-white rounded border border-slate-200 animate-pulse" />;
@@ -165,6 +212,117 @@ export const RentalDetailPage: React.FC = () => {
                 </div>
               ))}
             </div>
+          </Card>
+
+          {/* Direct Peer Communication & Coordination Chat */}
+          <Card id="chat" className="p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-[6px] bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[#4F46E5]">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                    Peer Handover & Coordination Chat
+                    <span className="text-xs text-slate-400 font-mono font-normal">
+                      ({messages.length})
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Direct communication between borrower and lender for meetup location, accessories, and return
+                  </p>
+                </div>
+              </div>
+
+              {/* Counterparty indicator */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
+                <span className="text-slate-400 text-[10px] uppercase font-semibold">
+                  {Number(rental.owner_id) === Number(user?.userId) ? 'Borrower:' : 'Lender:'}
+                </span>
+                <span className="font-semibold text-slate-900">
+                  {Number(rental.owner_id) === Number(user?.userId) ? rental.borrower_name : rental.owner_name}
+                </span>
+              </div>
+            </div>
+
+            {/* Messages Stream */}
+            <div className="max-h-[360px] min-h-[160px] overflow-y-auto space-y-3 p-4 bg-slate-50/50 rounded-[6px] border border-slate-100">
+              {messages.length === 0 ? (
+                <div className="py-8 text-center space-y-2">
+                  <MessageCircle className="w-7 h-7 text-slate-300 mx-auto" />
+                  <p className="text-xs font-medium text-slate-600">No messages exchanged yet</p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    Use this direct thread to coordinate on-campus meeting times, test hardware accessories, or ask technical questions.
+                  </p>
+                </div>
+              ) : (
+                messages.map((m: any) => {
+                  const isMe = Number(m.sender_id) === Number(user?.userId);
+                  const isLender = Number(m.sender_id) === Number(rental.owner_id);
+
+                  return (
+                    <div
+                      key={m.message_id}
+                      className={`flex flex-col max-w-[85%] ${
+                        isMe ? 'ml-auto items-end' : 'mr-auto items-start'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1 font-mono">
+                        <span className="font-semibold text-slate-700">
+                          {isMe ? 'You' : m.sender_name}
+                        </span>
+                        {!isMe && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${
+                              isLender
+                                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                : 'bg-cyan-50 border-cyan-200 text-cyan-800'
+                            }`}
+                          >
+                            {isLender ? 'LENDER' : 'BORROWER'}
+                          </span>
+                        )}
+                        <span>•</span>
+                        <span>
+                          {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div
+                        className={`p-3 rounded-lg text-xs leading-relaxed ${
+                          isMe
+                            ? 'bg-[#4F46E5] text-white rounded-tr-none shadow-sm'
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-sm'
+                        }`}
+                      >
+                        {m.message}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            <form onSubmit={handleSendMessage} className="flex gap-2 pt-1">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type a message to coordinate pickup location, accessories, or return..."
+                className="flex-1 h-[38px] px-3 text-xs border border-slate-300 rounded-[6px] focus:outline-none focus:border-[#4F46E5]"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                isLoading={isSendingMessage}
+                disabled={!newMessage.trim()}
+                className="gap-1.5 shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" /> Send
+              </Button>
+            </form>
           </Card>
 
           {/* Return Record (If returned) */}

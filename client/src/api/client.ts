@@ -154,6 +154,12 @@ export const api = {
   getMyRentals: (role?: 'borrower' | 'owner') =>
     request<{ rentals: any[] }>(`/rentals/my${role ? `?role=${role}` : ''}`),
   getRentalDetail: (id: number | string) => request<{ rental: any }>(`/rentals/${id}`),
+  getRentalMessages: (rentalId: number | string) => request<{ messages: any[] }>(`/rentals/${rentalId}/messages`),
+  sendRentalMessage: (rentalId: number | string, message: string) =>
+    request<{ message: any }>(`/rentals/${rentalId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
 
   // Wallet
   getWallet: () => request<{ wallet: any }>('/wallet'),

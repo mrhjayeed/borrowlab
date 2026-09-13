@@ -205,6 +205,17 @@ export interface Rental {
     reviewer_name?: string;
     created_at: string;
   } | null;
+  messages?: RentalMessage[];
+}
+
+export interface RentalMessage {
+  message_id: number;
+  rental_id: number;
+  sender_id: number;
+  sender_name: string;
+  sender_roles?: string[];
+  message: string;
+  created_at: string;
 }
 
 export interface Wallet {
