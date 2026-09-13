@@ -21,7 +21,7 @@ const createDamageReportSchema = z.object({
   ]),
   description: z.string().min(5),
   estimated_cost: z.coerce.number().positive(),
-  evidence_url: z.string().url().optional(),
+  evidence_url: z.string().optional(),
   evidence_description: z.string().optional(),
 });
 

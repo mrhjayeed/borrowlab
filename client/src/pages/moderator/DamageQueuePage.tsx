@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
+  ZoomIn,
+  Camera,
 } from 'lucide-react';
 
 export const DamageQueuePage: React.FC = () => {
@@ -23,6 +25,7 @@ export const DamageQueuePage: React.FC = () => {
   const [approvedCost, setApprovedCost] = useState('1500');
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -135,17 +138,23 @@ export const DamageQueuePage: React.FC = () => {
                   {rep.evidence && rep.evidence.length > 0 ? (
                     <div className="space-y-2">
                       {rep.evidence.map((ev) => (
-                        <a
+                        <div
                           key={ev.evidence_id}
-                          href={ev.file_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-2 p-2 rounded bg-slate-50 border border-slate-200 hover:bg-slate-100 text-xs text-[#4F46E5] truncate"
+                          onClick={() => setZoomImageUrl(ev.file_url)}
+                          className="flex items-center gap-2.5 p-2 rounded bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 cursor-pointer transition-all group"
                         >
-                          <FileImage className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{ev.description || 'View Photo Evidence'}</span>
-                          <ExternalLink className="w-3 h-3 shrink-0 ml-auto" />
-                        </a>
+                          <div className="w-10 h-10 rounded overflow-hidden bg-slate-200 shrink-0 border border-slate-300 relative">
+                            <img src={ev.file_url} alt="Evidence" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-slate-800 truncate group-hover:text-[#4F46E5]">
+                              {ev.description || 'Inspection photograph'}
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                              <ZoomIn className="w-3 h-3 text-indigo-500" /> Click to inspect photo
+                            </div>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -214,6 +223,40 @@ export const DamageQueuePage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Evidence Lightbox Viewer */}
+      {zoomImageUrl && (
+        <Modal
+          isOpen={!!zoomImageUrl}
+          onClose={() => setZoomImageUrl(null)}
+          title="Hardware Damage Evidence Viewer"
+          subtitle="Full-resolution inspection artifact"
+          maxWidth="lg"
+        >
+          <div className="space-y-3">
+            <div className="max-h-[70vh] flex items-center justify-center bg-slate-900/90 rounded-lg overflow-hidden p-2">
+              <img
+                src={zoomImageUrl}
+                alt="Enlarged Evidence"
+                className="max-h-[68vh] w-auto max-w-full object-contain rounded"
+              />
+            </div>
+            <div className="flex justify-between items-center text-xs text-slate-500">
+              <a
+                href={zoomImageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"
+              >
+                Open original file in new tab <ExternalLink className="w-3 h-3" />
+              </a>
+              <Button variant="secondary" size="sm" onClick={() => setZoomImageUrl(null)}>
+                Close Viewer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

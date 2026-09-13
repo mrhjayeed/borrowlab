@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useRealtimeEvent } from '../../context/RealtimeContext';
@@ -17,6 +17,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   Send,
+  Camera,
+  ZoomIn,
+  ExternalLink,
+  Paperclip,
+  X,
+  Loader2,
 } from 'lucide-react';
 
 export const DisputesQueuePage: React.FC = () => {
@@ -26,6 +32,55 @@ export const DisputesQueuePage: React.FC = () => {
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Evidence Lightbox viewer
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+
+  // Moderator attachment state
+  const [modAttachmentUrl, setModAttachmentUrl] = useState('');
+  const [modAttachmentPreview, setModAttachmentPreview] = useState<string | null>(null);
+  const [modAttachmentFile, setModAttachmentFile] = useState<File | null>(null);
+  const [isUploadingModAttachment, setIsUploadingModAttachment] = useState(false);
+  const modAttachmentInputRef = useRef<HTMLInputElement>(null);
+
+  const handleModAttachmentSelect = async (file: File) => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      error('Invalid image format', 'Please select a JPG, PNG, WEBP, or GIF image');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      error('File too large', 'Image size must be under 5MB');
+      return;
+    }
+
+    setModAttachmentFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setModAttachmentPreview(localUrl);
+
+    setIsUploadingModAttachment(true);
+    try {
+      const res = await api.uploadImage(file);
+      setModAttachmentUrl(res.url);
+      success('Directive attachment ready', `${file.name} uploaded`);
+    } catch (err: any) {
+      error(err.message || 'Failed to attach image');
+    } finally {
+      setIsUploadingModAttachment(false);
+    }
+  };
+
+  const handleClearModAttachment = () => {
+    if (modAttachmentPreview && modAttachmentPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(modAttachmentPreview);
+    }
+    setModAttachmentFile(null);
+    setModAttachmentPreview(null);
+    setModAttachmentUrl('');
+    if (modAttachmentInputRef.current) {
+      modAttachmentInputRef.current.value = '';
+    }
+  };
 
   // Resolution Modal State
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
@@ -89,12 +144,17 @@ export const DisputesQueuePage: React.FC = () => {
 
   const handleSendModeratorMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDispute || !modMessage.trim()) return;
+    const text = modMessage.trim();
+    if (!selectedDispute || (!text && !modAttachmentUrl)) return;
 
     setIsSendingModMsg(true);
     try {
-      await api.postDisputeMessage(selectedDispute.dispute_id, `[MODERATOR DIRECTIVE]: ${modMessage.trim()}`);
+      const directiveText = text
+        ? `[MODERATOR DIRECTIVE]: ${text}`
+        : '[MODERATOR DIRECTIVE]: Attached inspection artifact / document';
+      await api.postDisputeMessage(selectedDispute.dispute_id, directiveText, modAttachmentUrl || undefined);
       setModMessage('');
+      handleClearModAttachment();
       loadDetail(selectedDispute.dispute_id);
       success('Directive posted to thread');
     } catch (err: any) {
@@ -218,12 +278,35 @@ export const DisputesQueuePage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Primary Case Evidence Banner */}
+              {selectedDispute.evidence_url && (
+                <div className="px-4 py-2.5 bg-amber-50/80 border-b border-amber-200 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-amber-900 font-medium">
+                    <Camera className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Primary Case Evidence Photograph Submitted</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setZoomImageUrl(selectedDispute.evidence_url!)}
+                    className="flex items-center gap-2 px-2.5 py-1 rounded-[6px] bg-white border border-amber-300 text-xs font-semibold text-amber-800 hover:bg-amber-100/50 shadow-sm transition-all"
+                  >
+                    <img
+                      src={selectedDispute.evidence_url}
+                      alt="Evidence thumbnail"
+                      className="w-5 h-5 rounded object-cover border border-amber-200"
+                    />
+                    <span>Inspect Evidence Photo</span>
+                    <ZoomIn className="w-3.5 h-3.5 text-amber-600" />
+                  </button>
+                </div>
+              )}
+
               {/* Thread of Multi-Party Messages */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/30">
                 {selectedDispute.messages && selectedDispute.messages.map((m) => {
                   const isStaff = m.sender_roles?.some((r) => ['ADMIN', 'MODERATOR'].includes(r));
                   return (
-                    <div key={m.message_id} className="p-3 rounded-lg border bg-white shadow-level-1 text-xs space-y-1">
+                    <div key={m.message_id} className="p-3 rounded-lg border bg-white shadow-level-1 text-xs space-y-1.5">
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-semibold text-slate-800 flex items-center gap-1.5">
                           {m.sender_name}
@@ -237,14 +320,74 @@ export const DisputesQueuePage: React.FC = () => {
                           {new Date(m.created_at).toLocaleString()}
                         </span>
                       </div>
+                      {m.file_url && (
+                        <div className="pt-1 pb-0.5">
+                          <div
+                            onClick={() => setZoomImageUrl(m.file_url!)}
+                            className="relative group cursor-pointer overflow-hidden rounded-[6px] border border-slate-200 bg-slate-100 max-w-[240px]"
+                          >
+                            <img
+                              src={m.file_url}
+                              alt="Attachment"
+                              className="w-full h-36 object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-medium gap-1">
+                              <ZoomIn className="w-4 h-4" /> Inspect artifact
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <p className="text-slate-700 leading-relaxed">{m.message}</p>
                     </div>
                   );
                 })}
               </div>
 
+              {/* Pending Moderator Attachment Banner */}
+              {modAttachmentPreview && (
+                <div className="px-3 py-2 flex items-center gap-2 bg-amber-50/70 border-t border-amber-200 animate-in fade-in">
+                  <div className="relative w-10 h-10 rounded overflow-hidden border border-amber-200 bg-white shrink-0">
+                    <img src={modAttachmentPreview} alt="Pending directive attachment" className="w-full h-full object-cover" />
+                    {isUploadingModAttachment && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-700 font-medium truncate flex-1">
+                    {modAttachmentFile?.name || 'Inspection artifact attached'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearModAttachment}
+                    className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-white"
+                    title="Remove attachment"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* Moderator Directive Bar */}
-              <form onSubmit={handleSendModeratorMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2">
+              <form onSubmit={handleSendModeratorMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2 items-center">
+                <input
+                  ref={modAttachmentInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleModAttachmentSelect(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => modAttachmentInputRef.current?.click()}
+                  className="p-2 rounded-[6px] border border-slate-200 text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+                  title="Attach inspection photograph or artifact"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
                 <input
                   type="text"
                   value={modMessage}
@@ -252,7 +395,13 @@ export const DisputesQueuePage: React.FC = () => {
                   placeholder="Post formal moderator request or evidence inquiry..."
                   className="flex-1 h-[36px] px-3 text-xs border border-slate-300 rounded focus:outline-none focus:border-[#4F46E5]"
                 />
-                <Button type="submit" variant="secondary" size="md" isLoading={isSendingModMsg} className="gap-1">
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  size="md"
+                  isLoading={isSendingModMsg || isUploadingModAttachment}
+                  className="gap-1"
+                >
                   <Send className="w-3.5 h-3.5" /> Intervene
                 </Button>
               </form>
@@ -335,6 +484,40 @@ export const DisputesQueuePage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Evidence Lightbox Viewer */}
+      {zoomImageUrl && (
+        <Modal
+          isOpen={!!zoomImageUrl}
+          onClose={() => setZoomImageUrl(null)}
+          title="Arbitration Photographic Evidence Viewer"
+          subtitle="Full-resolution inspection artifact"
+          maxWidth="lg"
+        >
+          <div className="space-y-3">
+            <div className="max-h-[70vh] flex items-center justify-center bg-slate-900/90 rounded-lg overflow-hidden p-2">
+              <img
+                src={zoomImageUrl}
+                alt="Enlarged Evidence"
+                className="max-h-[68vh] w-auto max-w-full object-contain rounded"
+              />
+            </div>
+            <div className="flex justify-between items-center text-xs text-slate-500">
+              <a
+                href={zoomImageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"
+              >
+                Open original file in new tab <ExternalLink className="w-3 h-3" />
+              </a>
+              <Button variant="secondary" size="sm" onClick={() => setZoomImageUrl(null)}>
+                Close Viewer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

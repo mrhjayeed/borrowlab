@@ -22,6 +22,7 @@ const createDisputeSchema = z.object({
   ]),
   description: z.string().min(5, 'Description must be at least 5 characters'),
   requested_amount: z.coerce.number().nonnegative().optional(),
+  evidence_url: z.string().optional(),
 });
 
 const resolveDisputeSchema = z.object({
@@ -152,6 +153,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
         u.full_name AS sender_name,
         COALESCE(array_agg(r.role_name) FILTER (WHERE r.role_name IS NOT NULL), '{}') AS sender_roles,
         m.message,
+        m.file_url,
         m.created_at
        FROM dispute_messages m
        JOIN users u ON m.sender_id = u.user_id
@@ -177,7 +179,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     return;
   }
 
-  const { rental_id, reason, description, requested_amount } = parsed.data;
+  const { rental_id, reason, description, requested_amount, evidence_url } = parsed.data;
 
   try {
     const rentalRes = await query('SELECT * FROM rentals WHERE rental_id = $1', [rental_id]);
@@ -201,19 +203,19 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       // 1. Insert dispute
       const dispRes = await client.query(
         `INSERT INTO disputes (
-          rental_id, opened_by, against_user_id, reason, description, requested_amount, status, opened_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, 'OPEN', NOW())
+          rental_id, opened_by, against_user_id, reason, description, requested_amount, status, evidence_url, opened_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'OPEN', $7, NOW())
         RETURNING *`,
-        [rental.rental_id, req.user!.userId, againstUserId, reason, description, requested_amount || 0]
+        [rental.rental_id, req.user!.userId, againstUserId, reason, description, requested_amount || 0, evidence_url || null]
       );
 
       const newDispute = dispRes.rows[0];
 
-      // 2. Insert initial message
+      // 2. Insert initial message (with attached evidence if provided)
       await client.query(
-        `INSERT INTO dispute_messages (dispute_id, sender_id, message)
-         VALUES ($1, $2, $3)`,
-        [newDispute.dispute_id, req.user!.userId, description]
+        `INSERT INTO dispute_messages (dispute_id, sender_id, message, file_url)
+         VALUES ($1, $2, $3, $4)`,
+        [newDispute.dispute_id, req.user!.userId, description, evidence_url || null]
       );
 
       // 3. Freeze escrow if active
@@ -275,6 +277,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const schema = z.object({
     message: z.string().min(1),
+    file_url: z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -302,10 +305,10 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
     }
 
     const msgRes = await query(
-      `INSERT INTO dispute_messages (dispute_id, sender_id, message)
-       VALUES ($1, $2, $3)
+      `INSERT INTO dispute_messages (dispute_id, sender_id, message, file_url)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [dispute.dispute_id, req.user!.userId, parsed.data.message]
+      [dispute.dispute_id, req.user!.userId, parsed.data.message, parsed.data.file_url || null]
     );
 
     const messagePayload = {
@@ -315,6 +318,7 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
       sender_name: req.user!.fullName,
       sender_roles: req.user!.roles || [],
       message: parsed.data.message,
+      file_url: parsed.data.file_url || null,
       created_at: msgRes.rows[0].created_at,
     };
 

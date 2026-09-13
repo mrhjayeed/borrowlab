@@ -277,6 +277,7 @@ export interface Dispute {
   description: string;
   requested_amount: string | number;
   status: DisputeStatus;
+  evidence_url?: string;
   opened_at: string;
   resolved_at?: string;
   resolved_by_name?: string;
@@ -293,6 +294,7 @@ export interface DisputeMessage {
   sender_name: string;
   sender_roles: string[];
   message: string;
+  file_url?: string;
   created_at: string;
 }
 

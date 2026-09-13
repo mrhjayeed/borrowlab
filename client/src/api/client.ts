@@ -195,9 +195,9 @@ export const api = {
   getMyDisputes: () => request<{ disputes: any[] }>('/disputes/my'),
   getDisputeQueue: () => request<{ disputes: any[] }>('/disputes/queue'),
   getDisputeDetail: (id: number | string) => request<{ dispute: any }>(`/disputes/${id}`),
-  postDisputeMessage: (id: number | string, message: string) => request<{ message: any }>(`/disputes/${id}/messages`, {
+  postDisputeMessage: (id: number | string, message: string, file_url?: string) => request<{ message: any }>(`/disputes/${id}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, file_url }),
   }),
   resolveDispute: (id: number | string, payload: { status: string; settlement_amount_owner: number; resolution_notes: string }) =>
     request<{ message: string; dispute: any }>(`/disputes/${id}/resolve`, {

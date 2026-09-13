@@ -24,6 +24,9 @@ import {
   MessageSquare,
   MessageCircle,
   Send,
+  ZoomIn,
+  Camera,
+  ExternalLink,
 } from 'lucide-react';
 
 export const RentalDetailPage: React.FC = () => {
@@ -32,6 +35,7 @@ export const RentalDetailPage: React.FC = () => {
   const { success, error } = useToast();
   const [rental, setRental] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 
   // Review Modal State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
@@ -408,6 +412,79 @@ export const RentalDetailPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-slate-700">{dmg.description}</p>
+                  {dmg.evidence && dmg.evidence.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                        Inspection Evidence Photos ({dmg.evidence.length})
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {dmg.evidence.map((ev: any) => (
+                          <div
+                            key={ev.evidence_id}
+                            onClick={() => setZoomImageUrl(ev.file_url)}
+                            className="relative group cursor-pointer overflow-hidden rounded-[6px] border border-slate-200 bg-slate-100 w-24 h-20"
+                          >
+                            <img
+                              src={ev.file_url}
+                              alt={ev.description || 'Damage photo'}
+                              className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-medium gap-1">
+                              <ZoomIn className="w-3.5 h-3.5" /> View
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* Active Disputes (If any) */}
+          {rental.disputes && rental.disputes.length > 0 && (
+            <Card className="p-5 space-y-3 border-amber-200 bg-amber-50/30">
+              <div className="label-caps text-amber-800 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  Arbitration & Dispute Cases
+                </span>
+                <Link
+                  to="/disputes"
+                  className="text-xs text-[#4F46E5] font-semibold hover:underline flex items-center gap-1"
+                >
+                  Open Dispute Workbench <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+
+              {rental.disputes.map((disp: any) => (
+                <div key={disp.dispute_id} className="p-3 bg-white rounded border border-amber-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900">Case #{disp.dispute_id} • {disp.reason}</span>
+                    <StatusBadge status={disp.status} size="sm" />
+                  </div>
+                  <p className="text-slate-700">{disp.description}</p>
+                  {disp.evidence_url && (
+                    <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Attached Claim Photo:
+                      </span>
+                      <div
+                        onClick={() => setZoomImageUrl(disp.evidence_url)}
+                        className="relative group cursor-pointer overflow-hidden rounded-[6px] border border-slate-200 bg-slate-100 w-16 h-12 inline-block"
+                      >
+                        <img
+                          src={disp.evidence_url}
+                          alt="Dispute evidence"
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-medium">
+                          <ZoomIn className="w-3 h-3" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </Card>
@@ -629,6 +706,40 @@ export const RentalDetailPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Evidence Lightbox Viewer */}
+      {zoomImageUrl && (
+        <Modal
+          isOpen={!!zoomImageUrl}
+          onClose={() => setZoomImageUrl(null)}
+          title="Inspection & Damage Evidence"
+          subtitle="Full-resolution photographic artifact"
+          maxWidth="lg"
+        >
+          <div className="space-y-3">
+            <div className="max-h-[70vh] flex items-center justify-center bg-slate-900/90 rounded-lg overflow-hidden p-2">
+              <img
+                src={zoomImageUrl}
+                alt="Enlarged Evidence"
+                className="max-h-[68vh] w-auto max-w-full object-contain rounded"
+              />
+            </div>
+            <div className="flex justify-between items-center text-xs text-slate-500">
+              <a
+                href={zoomImageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"
+              >
+                Open original file in new tab <ExternalLink className="w-3 h-3" />
+              </a>
+              <Button variant="secondary" size="sm" onClick={() => setZoomImageUrl(null)}>
+                Close Viewer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

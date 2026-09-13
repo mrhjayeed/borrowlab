@@ -22,6 +22,7 @@ const returnConfirmationSchema = z.object({
   damage_type: z.enum(['MINOR_DAMAGE', 'MAJOR_DAMAGE', 'MISSING_ACCESSORY', 'LOST', 'NON_FUNCTIONAL', 'BURNED', 'PHYSICAL_DAMAGE', 'OTHER']).optional(),
   damage_description: z.string().optional(),
   estimated_cost: z.number().nonnegative().optional(),
+  evidence_url: z.string().optional(),
 });
 
 // GET /api/rentals/my
@@ -904,6 +905,7 @@ router.post('/:id/confirm-return', authenticateToken, async (req: AuthenticatedR
     damage_type,
     damage_description,
     estimated_cost,
+    evidence_url,
   } = parsed.data;
 
   try {
@@ -992,6 +994,19 @@ router.post('/:id/confirm-return', authenticateToken, async (req: AuthenticatedR
             estimated_cost || 500.0,
           ]
         );
+
+        if (evidence_url) {
+          await client.query(
+            `INSERT INTO damage_evidence (damage_report_id, uploaded_by, file_url, description)
+             VALUES ($1, $2, $3, $4)`,
+            [
+              dmgRes.rows[0].damage_report_id,
+              req.user!.userId,
+              evidence_url,
+              damage_description || return_notes || 'Return inspection evidence photograph',
+            ]
+          );
+        }
 
         // Update rental status
         await client.query(

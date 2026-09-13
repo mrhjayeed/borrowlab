@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +19,13 @@ import {
   Clock,
   CheckCircle2,
   ShieldAlert,
+  Camera,
+  UploadCloud,
+  X,
+  Loader2,
+  Paperclip,
+  ZoomIn,
+  ExternalLink,
 } from 'lucide-react';
 
 export const DisputesPage: React.FC = () => {
@@ -32,6 +39,16 @@ export const DisputesPage: React.FC = () => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Evidence Lightbox modal
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+
+  // Chat message photo attachment state
+  const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
+  const [chatAttachmentPreview, setChatAttachmentPreview] = useState<string | null>(null);
+  const [chatAttachmentFile, setChatAttachmentFile] = useState<File | null>(null);
+  const [isUploadingChatAttachment, setIsUploadingChatAttachment] = useState(false);
+  const chatAttachmentInputRef = useRef<HTMLInputElement>(null);
+
   // New Dispute Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [eligibleRentals, setEligibleRentals] = useState<Rental[]>([]);
@@ -40,6 +57,92 @@ export const DisputesPage: React.FC = () => {
   const [requestedAmount, setRequestedAmount] = useState('1500');
   const [disputeDescription, setDisputeDescription] = useState('');
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+
+  // New Dispute Evidence Upload State
+  const [createEvidenceUrl, setCreateEvidenceUrl] = useState('');
+  const [createFilePreview, setCreateFilePreview] = useState<string | null>(null);
+  const [createSelectedFile, setCreateSelectedFile] = useState<File | null>(null);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
+  const [isEvidenceDragOver, setIsEvidenceDragOver] = useState(false);
+  const evidenceInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCreateFileSelect = async (file: File) => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      error('Invalid image format', 'Please select a JPG, PNG, WEBP, or GIF image');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      error('File too large', 'Image size must be under 5MB');
+      return;
+    }
+
+    setCreateSelectedFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setCreateFilePreview(localUrl);
+
+    setIsUploadingEvidence(true);
+    try {
+      const res = await api.uploadImage(file);
+      setCreateEvidenceUrl(res.url);
+      success('Evidence uploaded', `${file.name} ready for claim submission`);
+    } catch (err: any) {
+      error(err.message || 'Failed to upload evidence');
+    } finally {
+      setIsUploadingEvidence(false);
+    }
+  };
+
+  const handleClearCreateEvidence = () => {
+    if (createFilePreview && createFilePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(createFilePreview);
+    }
+    setCreateSelectedFile(null);
+    setCreateFilePreview(null);
+    setCreateEvidenceUrl('');
+    if (evidenceInputRef.current) {
+      evidenceInputRef.current.value = '';
+    }
+  };
+
+  const handleChatAttachmentSelect = async (file: File) => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      error('Invalid image format', 'Please select a JPG, PNG, WEBP, or GIF image');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      error('File too large', 'Image size must be under 5MB');
+      return;
+    }
+
+    setChatAttachmentFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setChatAttachmentPreview(localUrl);
+
+    setIsUploadingChatAttachment(true);
+    try {
+      const res = await api.uploadImage(file);
+      setChatAttachmentUrl(res.url);
+      success('Attachment ready', `${file.name} uploaded`);
+    } catch (err: any) {
+      error(err.message || 'Failed to attach image');
+    } finally {
+      setIsUploadingChatAttachment(false);
+    }
+  };
+
+  const handleClearChatAttachment = () => {
+    if (chatAttachmentPreview && chatAttachmentPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(chatAttachmentPreview);
+    }
+    setChatAttachmentFile(null);
+    setChatAttachmentPreview(null);
+    setChatAttachmentUrl('');
+    if (chatAttachmentInputRef.current) {
+      chatAttachmentInputRef.current.value = '';
+    }
+  };
 
   const fetchDisputes = async () => {
     setIsLoading(true);
@@ -109,12 +212,18 @@ export const DisputesPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDispute || !newMessage.trim()) return;
+    const text = newMessage.trim();
+    if (!selectedDispute || (!text && !chatAttachmentUrl)) return;
 
     setIsSendingMessage(true);
     try {
-      await api.postDisputeMessage(selectedDispute.dispute_id, newMessage.trim());
+      await api.postDisputeMessage(
+        selectedDispute.dispute_id,
+        text || 'Attached photographic evidence',
+        chatAttachmentUrl || undefined
+      );
       setNewMessage('');
+      handleClearChatAttachment();
       loadDisputeDetail(selectedDispute.dispute_id);
     } catch (err: any) {
       error(err.message || 'Failed to post message');
@@ -141,11 +250,13 @@ export const DisputesPage: React.FC = () => {
         reason: disputeReason,
         description: disputeDescription.trim(),
         requested_amount: parseFloat(requestedAmount) || 0,
+        evidence_url: createEvidenceUrl || undefined,
       });
 
       success('Dispute submitted', 'Escrow deposit frozen and moderator assigned to review.');
       setIsCreateModalOpen(false);
       setDisputeDescription('');
+      handleClearCreateEvidence();
       fetchDisputes();
       loadDisputeDetail(res.dispute.dispute_id);
     } catch (err: any) {
@@ -248,6 +359,29 @@ export const DisputesPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Primary Case Evidence Banner */}
+                {selectedDispute.evidence_url && (
+                  <div className="px-4 py-2.5 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-indigo-900 font-medium">
+                      <Camera className="w-4 h-4 text-[#4F46E5] shrink-0" />
+                      <span>Primary Claim Photographic Evidence</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setZoomImageUrl(selectedDispute.evidence_url!)}
+                      className="flex items-center gap-2 px-2.5 py-1 rounded-[6px] bg-white border border-indigo-200 text-xs font-semibold text-[#4F46E5] hover:bg-indigo-50 shadow-sm transition-all"
+                    >
+                      <img
+                        src={selectedDispute.evidence_url}
+                        alt="Evidence thumbnail"
+                        className="w-5 h-5 rounded object-cover border border-slate-200"
+                      />
+                      <span>View Claim Evidence</span>
+                      <ZoomIn className="w-3.5 h-3.5 text-indigo-500" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Messages Stream */}
                 <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/20">
                   {selectedDispute.messages && selectedDispute.messages.map((m) => {
@@ -280,23 +414,89 @@ export const DisputesPage: React.FC = () => {
                               : 'bg-white border border-slate-200 text-slate-800 shadow-level-1'
                           }`}
                         >
-                          {m.message}
+                          {m.file_url && (
+                            <div className="mb-2">
+                              <div
+                                onClick={() => setZoomImageUrl(m.file_url!)}
+                                className="relative group cursor-pointer overflow-hidden rounded-[6px] border border-black/10 bg-black/5 max-w-[240px]"
+                              >
+                                <img
+                                  src={m.file_url}
+                                  alt="Attachment"
+                                  className="w-full h-36 object-cover transition-transform group-hover:scale-105"
+                                />
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-medium gap-1">
+                                  <ZoomIn className="w-4 h-4" /> Click to enlarge
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <div>{m.message}</div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
 
+                {/* Pending Attachment Banner */}
+                {chatAttachmentPreview && (
+                  <div className="px-3 py-2 flex items-center gap-2 bg-indigo-50/50 border-t border-indigo-100 animate-in fade-in">
+                    <div className="relative w-10 h-10 rounded overflow-hidden border border-indigo-200 bg-white shrink-0">
+                      <img src={chatAttachmentPreview} alt="Pending attachment" className="w-full h-full object-cover" />
+                      {isUploadingChatAttachment && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-slate-700 font-medium truncate flex-1">
+                      {chatAttachmentFile?.name || 'Photo attached'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleClearChatAttachment}
+                      className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-white"
+                      title="Remove attachment"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Thread Message Input */}
-                <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2">
+                <form onSubmit={handleSendMessage} className="p-3 border-t border-slate-200 bg-white flex gap-2 items-center">
+                  <input
+                    ref={chatAttachmentInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleChatAttachmentSelect(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => chatAttachmentInputRef.current?.click()}
+                    className="p-2 rounded-[6px] border border-slate-200 text-slate-500 hover:text-[#4F46E5] hover:bg-indigo-50 transition-colors"
+                    title="Attach photographic evidence"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type message for borrower, owner, and assigned moderator..."
+                    placeholder="Type message or attach photo evidence for parties & moderator..."
                     className="flex-1 h-[36px] px-3 text-xs border border-slate-300 rounded-[6px] focus:outline-none focus:border-[#4F46E5]"
                   />
-                  <Button type="submit" variant="primary" size="md" isLoading={isSendingMessage} className="gap-1">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    isLoading={isSendingMessage || isUploadingChatAttachment}
+                    className="gap-1"
+                  >
                     <Send className="w-3.5 h-3.5" /> Send
                   </Button>
                 </form>
@@ -313,7 +513,10 @@ export const DisputesPage: React.FC = () => {
       {/* File Dispute Modal */}
       <Modal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          handleClearCreateEvidence();
+          setIsCreateModalOpen(false);
+        }}
         title="File a Rental Dispute Claim"
         subtitle="Freezes security deposit in escrow until resolution is reached"
         maxWidth="md"
@@ -385,8 +588,94 @@ export const DisputesPage: React.FC = () => {
             />
           </div>
 
+          {/* Photographic Evidence Upload Dropzone */}
+          <div className="space-y-1.5 border border-slate-200 rounded-[8px] p-3 bg-slate-50/60">
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Camera className="w-3.5 h-3.5 text-[#4F46E5]" />
+              Photographic / Document Evidence (Optional)
+            </label>
+
+            {!createFilePreview && !createEvidenceUrl ? (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsEvidenceDragOver(true);
+                }}
+                onDragLeave={() => setIsEvidenceDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsEvidenceDragOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleCreateFileSelect(file);
+                }}
+                onClick={() => evidenceInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-[6px] p-3.5 text-center cursor-pointer transition-all ${
+                  isEvidenceDragOver
+                    ? 'border-[#4F46E5] bg-indigo-50/50'
+                    : 'border-slate-300 hover:border-slate-400 bg-white'
+                }`}
+              >
+                <input
+                  ref={evidenceInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCreateFileSelect(file);
+                  }}
+                />
+                <UploadCloud className="w-5 h-5 text-[#4F46E5] mx-auto mb-1" />
+                <div className="text-xs font-semibold text-slate-800">
+                  Upload damage photograph or hardware condition proof
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  JPG, PNG, WEBP up to 5MB
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 bg-white p-2 rounded-[6px] border border-slate-200">
+                <div className="w-14 h-14 rounded overflow-hidden bg-slate-100 shrink-0 border border-slate-200 relative">
+                  <img
+                    src={createFilePreview || createEvidenceUrl}
+                    alt="Evidence preview"
+                    className="w-full h-full object-cover"
+                  />
+                  {isUploadingEvidence && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-800 truncate">
+                    {createSelectedFile?.name || 'Evidence Image'}
+                  </div>
+                  <div className="text-[10px] text-emerald-600 font-medium">
+                    {isUploadingEvidence ? 'Uploading image...' : 'Evidence attached'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearCreateEvidence}
+                  className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title="Remove image"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button variant="secondary" type="button" onClick={() => setIsCreateModalOpen(false)}>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => {
+                handleClearCreateEvidence();
+                setIsCreateModalOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button variant="destructive" type="submit" isLoading={isSubmittingDispute}>
@@ -395,6 +684,40 @@ export const DisputesPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Lightbox / Evidence Viewer Modal */}
+      {zoomImageUrl && (
+        <Modal
+          isOpen={!!zoomImageUrl}
+          onClose={() => setZoomImageUrl(null)}
+          title="Photographic Evidence Viewer"
+          subtitle="High-resolution case artifact inspection"
+          maxWidth="lg"
+        >
+          <div className="space-y-3">
+            <div className="max-h-[70vh] flex items-center justify-center bg-slate-900/90 rounded-lg overflow-hidden p-2">
+              <img
+                src={zoomImageUrl}
+                alt="Enlarged Evidence"
+                className="max-h-[68vh] w-auto max-w-full object-contain rounded"
+              />
+            </div>
+            <div className="flex justify-between items-center text-xs text-slate-500">
+              <a
+                href={zoomImageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"
+              >
+                Open original file in new tab <ExternalLink className="w-3 h-3" />
+              </a>
+              <Button variant="secondary" size="sm" onClick={() => setZoomImageUrl(null)}>
+                Close Viewer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

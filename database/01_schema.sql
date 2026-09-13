@@ -514,6 +514,7 @@ CREATE TABLE disputes (
   description TEXT,
   requested_amount DECIMAL(12,2) CHECK (requested_amount >= 0),
   status dispute_status NOT NULL DEFAULT 'OPEN',
+  evidence_url TEXT,
   opened_at TIMESTAMP NOT NULL DEFAULT NOW(),
   resolved_at TIMESTAMP,
   resolved_by BIGINT REFERENCES users(user_id),
@@ -525,6 +526,7 @@ CREATE TABLE dispute_messages (
   dispute_id BIGINT NOT NULL REFERENCES disputes(dispute_id) ON DELETE CASCADE,
   sender_id BIGINT NOT NULL REFERENCES users(user_id),
   message TEXT NOT NULL,
+  file_url TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

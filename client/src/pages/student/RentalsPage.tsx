@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +22,10 @@ import {
   ArrowRight,
   Star,
   MessageSquare,
+  Camera,
+  UploadCloud,
+  X,
+  Loader2,
 } from 'lucide-react';
 
 export const RentalsPage: React.FC = () => {
@@ -42,6 +46,14 @@ export const RentalsPage: React.FC = () => {
   const [damageType, setDamageType] = useState('PHYSICAL_DAMAGE');
   const [estimatedCost, setEstimatedCost] = useState('1500');
   const [isInspecting, setIsInspecting] = useState(false);
+
+  // Evidence upload state for Return Inspection
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Review Modal state
   const [reviewModalRental, setReviewModalRental] = useState<Rental | null>(null);
@@ -109,6 +121,45 @@ export const RentalsPage: React.FC = () => {
     }
   };
 
+  const handleFileSelect = async (file: File) => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      error('Invalid image file', 'Please select a JPG, PNG, WEBP, or GIF image');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      error('Image size exceeds 5MB limit');
+      return;
+    }
+
+    setSelectedFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setFilePreview(localUrl);
+
+    setIsUploadingPhoto(true);
+    try {
+      const res = await api.uploadImage(file);
+      setEvidenceUrl(res.url);
+      success('Damage evidence attached', `${file.name} uploaded successfully`);
+    } catch (err: any) {
+      error(err.message || 'Failed to upload photo');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleClearSelectedPhoto = () => {
+    if (filePreview && filePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(filePreview);
+    }
+    setSelectedFile(null);
+    setFilePreview(null);
+    setEvidenceUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleConfirmReturnSubmit = async () => {
     if (!inspectModalRental) return;
     setIsInspecting(true);
@@ -120,6 +171,7 @@ export const RentalsPage: React.FC = () => {
         return_notes: returnNotes,
         damage_type: damageFound ? damageType : undefined,
         estimated_cost: damageFound ? parseFloat(estimatedCost) : undefined,
+        evidence_url: damageFound && evidenceUrl ? evidenceUrl : undefined,
       });
 
       if (damageFound) {
@@ -128,6 +180,7 @@ export const RentalsPage: React.FC = () => {
         success('Return confirmed', 'Hardware inspected cleanly. Escrow released to borrower and payout credited.');
       }
 
+      handleClearSelectedPhoto();
       setInspectModalRental(null);
       fetchRentals();
     } catch (err: any) {
@@ -321,6 +374,7 @@ export const RentalsPage: React.FC = () => {
                         size="sm"
                         className="bg-indigo-600 text-white"
                         onClick={() => {
+                          handleClearSelectedPhoto();
                           setInspectModalRental(rental);
                           setConditionAfterReturn('EXCELLENT');
                           setDamageFound(false);
@@ -386,7 +440,10 @@ export const RentalsPage: React.FC = () => {
       {/* Return Inspection Modal */}
       <Modal
         isOpen={!!inspectModalRental}
-        onClose={() => setInspectModalRental(null)}
+        onClose={() => {
+          handleClearSelectedPhoto();
+          setInspectModalRental(null);
+        }}
         title="Hardware Return Inspection"
         subtitle={`Rental #${inspectModalRental?.rental_id} • ${inspectModalRental?.inventory_code}`}
         maxWidth="md"
@@ -458,6 +515,86 @@ export const RentalsPage: React.FC = () => {
                 value={estimatedCost}
                 onChange={(e) => setEstimatedCost(e.target.value)}
               />
+
+              {/* Photographic Damage Evidence */}
+              <div className="space-y-1.5 pt-1 border-t border-red-200">
+                <label className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 text-red-600" />
+                  Photographic Evidence (Recommended)
+                </label>
+
+                {!filePreview && !evidenceUrl ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleFileSelect(file);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-[6px] p-3 text-center cursor-pointer transition-all ${
+                      isDragOver
+                        ? 'border-red-500 bg-red-100/50'
+                        : 'border-red-300 hover:border-red-400 bg-white'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileSelect(file);
+                      }}
+                    />
+                    <UploadCloud className="w-5 h-5 text-red-500 mx-auto mb-1" />
+                    <div className="text-xs font-semibold text-slate-800">
+                      Upload hardware damage photo
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      JPG, PNG, WEBP up to 5MB
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 bg-white p-2 rounded-[6px] border border-red-200">
+                    <div className="w-14 h-14 rounded overflow-hidden bg-slate-100 shrink-0 border border-slate-200 relative">
+                      <img
+                        src={filePreview || evidenceUrl}
+                        alt="Evidence preview"
+                        className="w-full h-full object-cover"
+                      />
+                      {isUploadingPhoto && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <Loader2 className="w-4 h-4 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-800 truncate">
+                        {selectedFile?.name || 'Evidence Image'}
+                      </div>
+                      <div className="text-[10px] text-emerald-600 font-medium">
+                        {isUploadingPhoto ? 'Uploading to secure storage...' : 'Ready for report'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedPhoto}
+                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Remove image"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <p className="text-[11px] text-red-700">
                 Filing damage freezes the escrow deposit ({inspectModalRental?.security_deposit} BDT) for dispute arbitration.
               </p>
