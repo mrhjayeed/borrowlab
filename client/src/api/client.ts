@@ -237,10 +237,13 @@ export const api = {
   },
   updateUserStatus: (id: number | string, status: string) =>
     request<{ user: any }>(`/admin/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
-  getAuditLogs: (params?: { action?: string; entity_type?: string }) => {
+  getAuditLogs: (params?: { action?: string; entity_type?: string; search?: string; page?: number; limit?: number }) => {
     const q = new URLSearchParams();
     if (params?.action) q.set('action', params.action);
     if (params?.entity_type) q.set('entity_type', params.entity_type);
-    return request<{ logs: any[] }>(`/admin/audit-logs?${q.toString()}`);
+    if (params?.search) q.set('search', params.search);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    return request<{ logs: any[]; total: number; page: number; limit: number; totalPages: number }>(`/admin/audit-logs?${q.toString()}`);
   },
 };

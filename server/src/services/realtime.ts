@@ -18,7 +18,8 @@ export type RealtimeEventType =
   | 'NOTIFICATION_READ'
   | 'INVENTORY_UPDATED'
   | 'LISTING_UPDATED'
-  | 'WAITLIST_UPDATED';
+  | 'WAITLIST_UPDATED'
+  | 'AUDIT_LOG_ENTRY';
 
 class RealtimeService {
   private clients: Map<string, RealtimeClient> = new Map();

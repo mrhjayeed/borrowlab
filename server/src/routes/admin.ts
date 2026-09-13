@@ -335,33 +335,73 @@ router.put('/users/:id/status', async (req: AuthenticatedRequest, res: Response)
 // GET /api/admin/audit-logs
 router.get('/audit-logs', async (req, res) => {
   try {
-    const { action, entity_type, limit = 100 } = req.query;
-    let sql = `
-      SELECT 
-        a.*,
-        u.full_name AS actor_name,
-        u.university_email AS actor_email
-      FROM audit_logs a
-      LEFT JOIN users u ON a.actor_user_id = u.user_id
-      WHERE 1=1
-    `;
+    const { action, entity_type, search, page = '1', limit = '50' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit as string) || 50));
+    const offset = (pageNum - 1) * limitNum;
+
+    let whereClause = 'WHERE 1=1';
     const params: any[] = [];
 
     if (action) {
       params.push(action);
-      sql += ` AND a.action = $${params.length}`;
+      whereClause += ` AND a.action = $${params.length}`;
     }
 
     if (entity_type) {
       params.push(entity_type);
-      sql += ` AND a.entity_type = $${params.length}`;
+      whereClause += ` AND a.entity_type = $${params.length}`;
     }
 
-    params.push(limit);
-    sql += ` ORDER BY a.created_at DESC LIMIT $${params.length}`;
+    if (search && typeof search === 'string' && search.trim()) {
+      params.push(`%${search.trim()}%`);
+      whereClause += ` AND (
+        u.full_name ILIKE $${params.length} OR
+        u.university_email ILIKE $${params.length} OR
+        a.entity_type ILIKE $${params.length} OR
+        a.action::text ILIKE $${params.length} OR
+        a.old_values ILIKE $${params.length} OR
+        a.new_values ILIKE $${params.length} OR
+        CAST(a.entity_id AS TEXT) ILIKE $${params.length}
+      )`;
+    }
 
-    const result = await query(sql, params);
-    res.json({ logs: result.rows });
+    // Count total matching
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM audit_logs a
+      LEFT JOIN users u ON a.actor_user_id = u.user_id
+      ${whereClause}
+    `;
+    const countRes = await query(countSql, params);
+    const total = parseInt(countRes.rows[0].total, 10) || 0;
+
+    // Fetch paginated logs with actor roles
+    const selectSql = `
+      SELECT 
+        a.*,
+        u.full_name AS actor_name,
+        u.university_email AS actor_email,
+        COALESCE(
+          (SELECT json_agg(r.role_name) FROM user_roles ur JOIN roles r ON ur.role_id = r.role_id WHERE ur.user_id = a.actor_user_id),
+          '[]'
+        ) AS actor_roles
+      FROM audit_logs a
+      LEFT JOIN users u ON a.actor_user_id = u.user_id
+      ${whereClause}
+      ORDER BY a.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    params.push(limitNum, offset);
+
+    const result = await query(selectSql, params);
+    res.json({
+      logs: result.rows,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

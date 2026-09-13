@@ -131,6 +131,7 @@ export const RealtimeProvider: React.FC<{ children: ReactNode }> = ({ children }
         'INVENTORY_UPDATED',
         'LISTING_UPDATED',
         'WAITLIST_UPDATED',
+        'AUDIT_LOG_ENTRY',
       ];
 
       monitoredEvents.forEach((eventType) => {
