@@ -61,6 +61,24 @@ export const RentalsPage: React.FC = () => {
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
+  // Cancellation Modal state
+  const [cancelModalRental, setCancelModalRental] = useState<Rental | null>(null);
+  const [cancelModalTitle, setCancelModalTitle] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const formatExpiryBadge = (expiresAt?: string) => {
+    if (!expiresAt) return null;
+    const diffMs = new Date(expiresAt).getTime() - Date.now();
+    if (diffMs <= 0) return 'Approval Expired';
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) {
+      return `Expires in ${hours}h ${minutes}m`;
+    }
+    return `Expires in ${minutes}m`;
+  };
+
   const fetchRentals = async () => {
     setIsLoading(true);
     try {
@@ -214,6 +232,31 @@ export const RentalsPage: React.FC = () => {
     }
   };
 
+  const handlePromptCancel = (rental: Rental, isOwner: boolean) => {
+    setCancelModalRental(rental);
+    setCancelModalTitle(isOwner ? 'Revoke Approval' : 'Cancel Rental Request');
+    setCancelReason('');
+  };
+
+  const handleExecuteCancel = async () => {
+    if (!cancelModalRental) return;
+    setIsCancelling(true);
+    try {
+      await api.cancelRental(cancelModalRental.rental_id, cancelReason.trim() || undefined);
+      success(
+        cancelModalTitle === 'Revoke Approval' ? 'Approval Revoked' : 'Rental Request Cancelled',
+        'No escrow funds were locked and hardware status has been updated.'
+      );
+      setCancelModalRental(null);
+      setCancelReason('');
+      fetchRentals();
+    } catch (err: any) {
+      error(err.message || 'Failed to cancel rental');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header & Tabs */}
@@ -283,12 +326,21 @@ export const RentalsPage: React.FC = () => {
               >
                 {/* Left info */}
                 <div className="space-y-2 max-w-xl">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="mono-data-sm text-[#4F46E5] font-semibold">{rental.inventory_code}</span>
                     <span className="text-slate-300">•</span>
                     <span className="text-xs text-slate-500">{rental.component_name}</span>
                     <span className="text-slate-300">•</span>
                     <StatusBadge status={rental.status} size="sm" />
+                    {rental.status === 'APPROVED' && rental.expires_at && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                        title={`Approval expires at ${new Date(rental.expires_at).toLocaleString()}`}
+                      >
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        {formatExpiryBadge(rental.expires_at)}
+                      </span>
+                    )}
                   </div>
 
                   <Link to={`/rentals/${rental.rental_id}`} className="group block">
@@ -348,7 +400,19 @@ export const RentalsPage: React.FC = () => {
                       </>
                     )}
 
-                    {/* Borrower Activation Action (CONCURRENCY LOCK DEMO) */}
+                    {/* Owner Revoke Approval Action */}
+                    {isOwner && rental.status === 'APPROVED' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 gap-1"
+                        onClick={() => handlePromptCancel(rental, true)}
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Revoke Approval
+                      </Button>
+                    )}
+
+                    {/* Borrower Activation Action */}
                     {isBorrower && rental.status === 'APPROVED' && (
                       <Button
                         variant="primary"
@@ -357,6 +421,18 @@ export const RentalsPage: React.FC = () => {
                         onClick={() => handleActivate(rental.rental_id)}
                       >
                         <Play className="w-3 h-3 fill-white" /> Activate & Lock Escrow
+                      </Button>
+                    )}
+
+                    {/* Borrower Cancel Request Action (REQUESTED or APPROVED before activation) */}
+                    {isBorrower && ['REQUESTED', 'APPROVED'].includes(rental.status) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-slate-600 hover:text-red-600 hover:border-red-200 gap-1"
+                        onClick={() => handlePromptCancel(rental, false)}
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Cancel Request
                       </Button>
                     )}
 
@@ -693,6 +769,77 @@ export const RentalsPage: React.FC = () => {
               onClick={handleReviewSubmit}
             >
               Publish Review
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cancellation Confirmation Modal */}
+      <Modal
+        isOpen={!!cancelModalRental}
+        onClose={() => {
+          if (!isCancelling) {
+            setCancelModalRental(null);
+            setCancelReason('');
+          }
+        }}
+        title={cancelModalTitle}
+        subtitle={`Rental #${cancelModalRental?.rental_id} • ${cancelModalRental?.component_name}`}
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-amber-50 rounded-[6px] border border-amber-200 text-xs text-amber-800 space-y-1">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              {cancelModalTitle === 'Revoke Approval'
+                ? 'Revoke approval before activation'
+                : 'Cancel rental request'}
+            </div>
+            <p className="text-amber-700">
+              {cancelModalTitle === 'Revoke Approval'
+                ? 'This rental has not been activated yet. Revoking approval will return the hardware to available inventory and cancel the reservation.'
+                : 'No escrow deposit or rental fees have been charged. Hardware will immediately become available for other campus peers.'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Reason for Cancellation <span className="text-slate-400 font-normal lowercase">(optional)</span>
+            </label>
+            <Input
+              type="text"
+              placeholder={
+                cancelModalTitle === 'Revoke Approval'
+                  ? 'e.g., Equipment needed for urgent project, schedule conflict'
+                  : 'e.g., Found alternative equipment, project scope changed'
+              }
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="text-xs"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCancelModalRental(null);
+                setCancelReason('');
+              }}
+              disabled={isCancelling}
+            >
+              Keep Rental
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleExecuteCancel}
+              isLoading={isCancelling}
+              className="gap-1.5"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              {cancelModalTitle === 'Revoke Approval' ? 'Confirm Revoke' : 'Confirm Cancel'}
             </Button>
           </div>
         </div>

@@ -145,6 +145,11 @@ export const api = {
     request<{ rental: any }>('/rentals/request', { method: 'POST', body: JSON.stringify(payload) }),
   approveRental: (id: number | string) => request<{ rental: any }>(`/rentals/${id}/approve`, { method: 'POST' }),
   rejectRental: (id: number | string) => request<{ rental: any }>(`/rentals/${id}/reject`, { method: 'POST' }),
+  cancelRental: (id: number | string, reason?: string) =>
+    request<{ message: string; rental: any }>(`/rentals/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
   activateRental: (id: number | string) => request<{ message: string; rental: any }>(`/rentals/${id}/activate`, { method: 'POST' }),
   requestReturn: (id: number | string) => request<{ rental: any }>(`/rentals/${id}/request-return`, { method: 'POST' }),
   confirmReturn: (id: number | string, payload: any) => request<{ message: string; result: any }>(`/rentals/${id}/confirm-return`, {

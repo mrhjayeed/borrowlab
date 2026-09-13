@@ -186,6 +186,7 @@ export interface Rental {
   status: RentalStatus;
   requested_at: string;
   approved_at?: string;
+  expires_at?: string;
   escrow_id?: number;
   escrow_status?: EscrowStatus;
   escrow_held_amount?: string | number;

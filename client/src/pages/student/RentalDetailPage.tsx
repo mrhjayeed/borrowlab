@@ -6,6 +6,7 @@ import { useRealtimeEvent } from '../../context/RealtimeContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { Input } from '../../components/ui/Input';
 import { StatusBadge } from '../../components/ui/Badge';
 import { TrustGauge } from '../../components/ui/TrustGauge';
 import { useToast } from '../../context/ToastContext';
@@ -27,6 +28,8 @@ import {
   ZoomIn,
   Camera,
   ExternalLink,
+  XCircle,
+  Play,
 } from 'lucide-react';
 
 export const RentalDetailPage: React.FC = () => {
@@ -42,6 +45,29 @@ export const RentalDetailPage: React.FC = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Cancellation Modal State
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelModalTitle, setCancelModalTitle] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Action loading states
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
+
+  const formatExpiryBadge = (expiresAt?: string) => {
+    if (!expiresAt) return null;
+    const diffMs = new Date(expiresAt).getTime() - Date.now();
+    if (diffMs <= 0) return 'Approval Expired';
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) {
+      return `Expires in ${hours}h ${minutes}m`;
+    }
+    return `Expires in ${minutes}m`;
+  };
 
   // Chat State
   const [messages, setMessages] = useState<any[]>([]);
@@ -143,6 +169,73 @@ export const RentalDetailPage: React.FC = () => {
     }
   };
 
+  const handleApprove = async () => {
+    if (!rental) return;
+    setIsApproving(true);
+    try {
+      await api.approveRental(rental.rental_id);
+      success('Rental approved', 'Borrower can now activate the rental.');
+      loadRental();
+    } catch (err: any) {
+      error(err.message || 'Failed to approve rental');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rental) return;
+    setIsRejecting(true);
+    try {
+      await api.rejectRental(rental.rental_id);
+      success('Rental rejected');
+      loadRental();
+    } catch (err: any) {
+      error(err.message || 'Failed to reject rental');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const handleActivate = async () => {
+    if (!rental) return;
+    setIsActivating(true);
+    try {
+      await api.activateRental(rental.rental_id);
+      success('Rental activated successfully', 'Physical inventory locked and escrow security deposit secured.');
+      loadRental();
+    } catch (err: any) {
+      error(err.message || 'Failed to activate rental');
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const handlePromptCancel = (isOwnerAction: boolean) => {
+    setCancelModalTitle(isOwnerAction ? 'Revoke Approval' : 'Cancel Rental Request');
+    setCancelReason('');
+    setIsCancelModalOpen(true);
+  };
+
+  const handleExecuteCancel = async () => {
+    if (!rental) return;
+    setIsCancelling(true);
+    try {
+      await api.cancelRental(rental.rental_id, cancelReason.trim() || undefined);
+      success(
+        cancelModalTitle === 'Revoke Approval' ? 'Approval Revoked' : 'Rental Request Cancelled',
+        'No escrow funds were locked and hardware status has been updated.'
+      );
+      setIsCancelModalOpen(false);
+      setCancelReason('');
+      loadRental();
+    } catch (err: any) {
+      error(err.message || 'Failed to cancel rental');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const formatMessageTime = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -183,9 +276,18 @@ export const RentalDetailPage: React.FC = () => {
             <span>/</span>
             <span className="font-mono text-slate-900">Rental #{rental.rental_id}</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex flex-wrap items-center gap-3">
             {rental.listing_title}
             <StatusBadge status={rental.status} size="md" />
+            {rental.status === 'APPROVED' && rental.expires_at && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                title={`Approval expires at ${new Date(rental.expires_at).toLocaleString()}`}
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                {formatExpiryBadge(rental.expires_at)}
+              </span>
+            )}
           </h1>
         </div>
 
@@ -208,6 +310,106 @@ export const RentalDetailPage: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* 24-Hour Expiry Window & Action Alert for APPROVED state */}
+      {rental.status === 'APPROVED' && (
+        <Card className="p-4 border-amber-200 bg-amber-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 shrink-0 mt-0.5 sm:mt-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-amber-900 text-sm">Rental Approved — Activation Window Open</span>
+                {rental.expires_at && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
+                    {formatExpiryBadge(rental.expires_at)}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {Number(rental.borrower_id) === Number(user?.userId)
+                  ? 'The owner approved your request. Activate now to lock your escrow deposit and confirm hardware handover.'
+                  : 'You approved this rental. If the borrower does not activate within 24 hours, the approval will auto-expire.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {Number(rental.borrower_id) === Number(user?.userId) && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                  onClick={handleActivate}
+                  isLoading={isActivating}
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" /> Activate & Lock Escrow
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-slate-700 hover:text-red-600 hover:border-red-200 gap-1"
+                  onClick={() => handlePromptCancel(false)}
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Cancel Request
+                </Button>
+              </>
+            )}
+            {Number(rental.owner_id) === Number(user?.userId) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 gap-1"
+                onClick={() => handlePromptCancel(true)}
+              >
+                <XCircle className="w-3.5 h-3.5" /> Revoke Approval
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Action Alert for REQUESTED state */}
+      {rental.status === 'REQUESTED' && (
+        <Card className="p-4 border-blue-200 bg-blue-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-[#4F46E5] shrink-0 mt-0.5 sm:mt-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-semibold text-slate-900 text-sm">Rental Request Pending Owner Review</span>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {Number(rental.borrower_id) === Number(user?.userId)
+                  ? 'Waiting for the hardware owner to approve your request. You can cancel at any time.'
+                  : 'The borrower has requested this equipment. Review terms and approve to open the 24-hour activation window.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {Number(rental.owner_id) === Number(user?.userId) && (
+              <>
+                <Button variant="primary" size="sm" onClick={handleApprove} isLoading={isApproving}>
+                  Approve Request
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleReject} isLoading={isRejecting}>
+                  Reject
+                </Button>
+              </>
+            )}
+            {Number(rental.borrower_id) === Number(user?.userId) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-slate-700 hover:text-red-600 hover:border-red-200 gap-1"
+                onClick={() => handlePromptCancel(false)}
+              >
+                <XCircle className="w-3.5 h-3.5" /> Cancel Request
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Columns: Audit Trail, Return Inspection, Damage */}
@@ -740,6 +942,77 @@ export const RentalDetailPage: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Cancellation Confirmation Modal */}
+      <Modal
+        isOpen={isCancelModalOpen}
+        onClose={() => {
+          if (!isCancelling) {
+            setIsCancelModalOpen(false);
+            setCancelReason('');
+          }
+        }}
+        title={cancelModalTitle}
+        subtitle={`Rental #${rental?.rental_id} • ${rental?.component_name}`}
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-amber-50 rounded-[6px] border border-amber-200 text-xs text-amber-800 space-y-1">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-900">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              {cancelModalTitle === 'Revoke Approval'
+                ? 'Revoke approval before activation'
+                : 'Cancel rental request'}
+            </div>
+            <p className="text-amber-700">
+              {cancelModalTitle === 'Revoke Approval'
+                ? 'This rental has not been activated yet. Revoking approval will return the hardware to available inventory and cancel the reservation.'
+                : 'No escrow deposit or rental fees have been charged. Hardware will immediately become available for other campus peers.'}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Reason for Cancellation <span className="text-slate-400 font-normal lowercase">(optional)</span>
+            </label>
+            <Input
+              type="text"
+              placeholder={
+                cancelModalTitle === 'Revoke Approval'
+                  ? 'e.g., Equipment needed for urgent project, schedule conflict'
+                  : 'e.g., Found alternative equipment, project scope changed'
+              }
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="text-xs"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsCancelModalOpen(false);
+                setCancelReason('');
+              }}
+              disabled={isCancelling}
+            >
+              Keep Rental
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleExecuteCancel}
+              isLoading={isCancelling}
+              className="gap-1.5"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              {cancelModalTitle === 'Revoke Approval' ? 'Confirm Revoke' : 'Confirm Cancel'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

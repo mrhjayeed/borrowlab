@@ -30,6 +30,12 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
   try {
     const { role } = req.query; // 'borrower' | 'owner' | undefined
 
+    // Auto-expire stale approvals older than 24 hours
+    await query(`
+      UPDATE rentals SET status = 'CANCELLED', updated_at = NOW()
+      WHERE status = 'APPROVED' AND approved_at < NOW() - INTERVAL '24 hours'
+    `);
+
     let sql = `
       SELECT 
         r.rental_id,
@@ -54,6 +60,11 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
         r.status,
         r.requested_at,
         r.approved_at,
+        CASE 
+          WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL 
+          THEN r.approved_at + INTERVAL '24 hours' 
+          ELSE NULL 
+        END AS expires_at,
         e.escrow_id,
         e.status AS escrow_status,
         e.held_amount AS escrow_held_amount,
@@ -116,9 +127,20 @@ router.get('/my', authenticateToken, async (req: AuthenticatedRequest, res: Resp
 // GET /api/rentals/:id
 router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    // Auto-expire stale approvals older than 24 hours
+    await query(`
+      UPDATE rentals SET status = 'CANCELLED', updated_at = NOW()
+      WHERE status = 'APPROVED' AND approved_at < NOW() - INTERVAL '24 hours'
+    `);
+
     const rentalRes = await query(
       `SELECT 
         r.*,
+        CASE 
+          WHEN r.status = 'APPROVED' AND r.approved_at IS NOT NULL 
+          THEN r.approved_at + INTERVAL '24 hours' 
+          ELSE NULL 
+        END AS expires_at,
         l.listing_title,
         l.pickup_information,
         i.inventory_code,
@@ -632,6 +654,94 @@ router.post('/:id/reject', authenticateToken, async (req: AuthenticatedRequest, 
   }
 });
 
+// POST /api/rentals/:id/cancel
+// Borrower cancels request/approval, or Owner revokes unactivated approval
+router.post('/:id/cancel', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const schema = z.object({
+    reason: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  const userReason = parsed.success && parsed.data.reason ? parsed.data.reason.trim() : '';
+
+  try {
+    const rentalRes = await query('SELECT * FROM rentals WHERE rental_id = $1', [req.params.id]);
+    if (rentalRes.rows.length === 0) {
+      res.status(404).json({ error: 'Rental not found' });
+      return;
+    }
+
+    const rental = rentalRes.rows[0];
+    const isOwner = Number(rental.owner_id) === Number(req.user!.userId);
+    const isBorrower = Number(rental.borrower_id) === Number(req.user!.userId);
+    const isAdmin = req.user!.roles.includes('ADMIN');
+
+    if (!isOwner && !isBorrower && !isAdmin) {
+      res.status(403).json({ error: 'Unauthorized to cancel this rental' });
+      return;
+    }
+
+    // Only unactivated rentals can be cancelled directly (no funds locked in escrow yet)
+    if (!['REQUESTED', 'APPROVED'].includes(rental.status)) {
+      res.status(400).json({
+        error: `Cannot cancel rental with status '${rental.status}'. Active or returned rentals must follow standard return inspection or dispute workflow.`,
+      });
+      return;
+    }
+
+    const counterpartyId = isBorrower ? rental.owner_id : rental.borrower_id;
+    const actorRoleName = isBorrower ? 'Borrower' : isOwner ? 'Owner' : 'Administrator';
+    const actionLabel = isBorrower
+      ? 'Borrower cancelled rental request'
+      : isOwner && rental.status === 'APPROVED'
+      ? 'Owner revoked rental approval'
+      : `${actorRoleName} cancelled rental`;
+    const defaultReason = userReason || (isOwner && rental.status === 'APPROVED' ? 'Owner revoked approval' : 'Cancelled prior to activation');
+
+    const updated = await withTransaction(async (client) => {
+      const result = await client.query(
+        `UPDATE rentals SET status = 'CANCELLED', updated_at = NOW() WHERE rental_id = $1 RETURNING *`,
+        [rental.rental_id]
+      );
+
+      await client.query(
+        `INSERT INTO rental_status_history (rental_id, old_status, new_status, changed_by, reason)
+         VALUES ($1, $2, 'CANCELLED', $3, $4)`,
+        [rental.rental_id, rental.status, req.user!.userId, userReason ? `${actionLabel}: ${userReason}` : actionLabel]
+      );
+
+      await client.query(
+        `INSERT INTO notifications (user_id, notification_type, title, message, related_rental_id)
+         VALUES ($1, 'RENTAL_CANCELLED', 'Rental Cancelled', $2, $3)`,
+        [
+          counterpartyId,
+          `${req.user!.fullName} (${actorRoleName.toLowerCase()}) cancelled Rental #${rental.rental_id}. ${userReason ? `Reason: "${userReason}"` : ''}`,
+          rental.rental_id,
+        ]
+      );
+
+      await logAudit(client, req.user!.userId, 'STATUS_CHANGE', 'rentals', rental.rental_id, { status: rental.status }, { status: 'CANCELLED', reason: defaultReason });
+
+      return result.rows[0];
+    });
+
+    realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+      rental_id: updated.rental_id,
+      status: updated.status,
+      listing_id: updated.listing_id,
+    });
+    realtime.sendToUser(counterpartyId, 'NOTIFICATION', {
+      title: 'Rental Cancelled',
+      message: `${req.user!.fullName} cancelled Rental #${rental.rental_id}`,
+      related_rental_id: updated.rental_id,
+    });
+    realtime.broadcast('LISTING_UPDATED', { listing_id: updated.listing_id });
+
+    res.json({ message: 'Rental cancelled successfully', rental: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/rentals/:id/activate
 // Step 3: CRITICAL ACID TRANSACTION & CONCURRENCY CONTROL
 // Uses SELECT ... FOR UPDATE on inventory row and borrower wallet.
@@ -656,6 +766,20 @@ router.post('/:id/activate', authenticateToken, async (req: AuthenticatedRequest
 
       if (rental.status !== 'APPROVED') {
         throw new Error(`Cannot activate rental with status ${rental.status}. Must be APPROVED.`);
+      }
+
+      // 24-HOUR EXPIRY WINDOW CHECK
+      if (rental.approved_at) {
+        const approvedTime = new Date(rental.approved_at).getTime();
+        const isExpired = Date.now() - approvedTime > 24 * 60 * 60 * 1000;
+        if (isExpired) {
+          await client.query("UPDATE rentals SET status = 'CANCELLED', updated_at = NOW() WHERE rental_id = $1", [rental.rental_id]);
+          await client.query(
+            "INSERT INTO rental_status_history (rental_id, old_status, new_status, changed_by, reason) VALUES ($1, 'APPROVED', 'CANCELLED', $2, 'Approval window expired (24h limit)')",
+            [rental.rental_id, req.user!.userId]
+          );
+          throw new Error('This rental approval has expired (24-hour activation limit). Please submit a new rental request.');
+        }
       }
 
       // 2. ROW-LEVEL LOCK ON PHYSICAL INVENTORY
