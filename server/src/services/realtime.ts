@@ -9,6 +9,7 @@ export interface RealtimeClient {
 
 export type RealtimeEventType =
   | 'RENTAL_UPDATED'
+  | 'RENTAL_MESSAGE'
   | 'DISPUTE_UPDATED'
   | 'DISPUTE_MESSAGE'
   | 'DISPUTE_RESOLVED'

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -43,19 +43,21 @@ export const RentalDetailPage: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const loadRental = () => {
+  const loadRental = useCallback(async () => {
     if (!id) return;
-    api.getRentalDetail(id)
-      .then((res) => {
-        setRental(res.rental);
-        if (res.rental?.messages) {
-          setMessages(res.rental.messages);
-        }
-      })
-      .catch(() => {});
-  };
+    try {
+      const res = await api.getRentalDetail(id);
+      setRental(res.rental);
+      if (res.rental?.messages) {
+        setMessages(res.rental.messages);
+      }
+      return res.rental;
+    } catch {
+      // Not found or unauthorized
+    }
+  }, [id]);
 
   const handleReviewSubmit = async () => {
     if (!rental) return;
@@ -84,11 +86,17 @@ export const RentalDetailPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setIsLoading(true);
-    api.getRentalDetail(id)
-      .then((res) => setRental(res.rental))
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, [id]);
+    loadRental().finally(() => setIsLoading(false));
+  }, [id, user?.userId, loadRental]);
+
+  useEffect(() => {
+    if (window.location.hash === '#chat') {
+      const timer = setTimeout(() => {
+        document.getElementById('chat')?.scrollIntoView({ behavior: 'smooth' });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [rental?.rental_id]);
 
   useRealtimeEvent(['RENTAL_UPDATED', 'DISPUTE_UPDATED', 'WALLET_UPDATED'], (data: any) => {
     if (!data?.rental_id || Number(data.rental_id) === Number(id)) {
@@ -106,7 +114,9 @@ export const RentalDetailPage: React.FC = () => {
   });
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -126,6 +136,20 @@ export const RentalDetailPage: React.FC = () => {
       error(err.message || 'Failed to send message');
     } finally {
       setIsSendingMessage(false);
+    }
+  };
+
+  const formatMessageTime = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const isToday = d.toDateString() === now.toDateString();
+      if (isToday) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } catch {
+      return dateStr;
     }
   };
 
@@ -235,18 +259,31 @@ export const RentalDetailPage: React.FC = () => {
               </div>
 
               {/* Counterparty indicator */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
-                <span className="text-slate-400 text-[10px] uppercase font-semibold">
-                  {Number(rental.owner_id) === Number(user?.userId) ? 'Borrower:' : 'Lender:'}
-                </span>
-                <span className="font-semibold text-slate-900">
-                  {Number(rental.owner_id) === Number(user?.userId) ? rental.borrower_name : rental.owner_name}
-                </span>
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-[6px] bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
+                {Number(rental.owner_id) === Number(user?.userId) ? (
+                  <>
+                    <span className="text-slate-400 text-[10px] uppercase font-semibold">Borrower:</span>
+                    <span className="font-semibold text-slate-900">{rental.borrower_name}</span>
+                  </>
+                ) : Number(rental.borrower_id) === Number(user?.userId) ? (
+                  <>
+                    <span className="text-slate-400 text-[10px] uppercase font-semibold">Lender:</span>
+                    <span className="font-semibold text-slate-900">{rental.owner_name}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-slate-400 text-[10px] uppercase font-semibold">Parties:</span>
+                    <span className="font-semibold text-slate-900">{rental.borrower_name} & {rental.owner_name}</span>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Messages Stream */}
-            <div className="max-h-[360px] min-h-[160px] overflow-y-auto space-y-3 p-4 bg-slate-50/50 rounded-[6px] border border-slate-100">
+            <div
+              ref={messagesContainerRef}
+              className="max-h-[360px] min-h-[160px] overflow-y-auto space-y-3 p-4 bg-slate-50/50 rounded-[6px] border border-slate-100"
+            >
               {messages.length === 0 ? (
                 <div className="py-8 text-center space-y-2">
                   <MessageCircle className="w-7 h-7 text-slate-300 mx-auto" />
@@ -271,21 +308,17 @@ export const RentalDetailPage: React.FC = () => {
                         <span className="font-semibold text-slate-700">
                           {isMe ? 'You' : m.sender_name}
                         </span>
-                        {!isMe && (
-                          <span
-                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${
-                              isLender
-                                ? 'bg-amber-50 border-amber-200 text-amber-800'
-                                : 'bg-cyan-50 border-cyan-200 text-cyan-800'
-                            }`}
-                          >
-                            {isLender ? 'LENDER' : 'BORROWER'}
-                          </span>
-                        )}
-                        <span>•</span>
-                        <span>
-                          {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <span
+                          className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${
+                            isLender
+                              ? 'bg-amber-50 border-amber-200 text-amber-800'
+                              : 'bg-cyan-50 border-cyan-200 text-cyan-800'
+                          }`}
+                        >
+                          {isLender ? 'LENDER' : 'BORROWER'}
                         </span>
+                        <span>•</span>
+                        <span>{formatMessageTime(m.created_at)}</span>
                       </div>
                       <div
                         className={`p-3 rounded-lg text-xs leading-relaxed ${
@@ -300,7 +333,6 @@ export const RentalDetailPage: React.FC = () => {
                   );
                 })
               )}
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Message Input */}

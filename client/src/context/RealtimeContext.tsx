@@ -121,6 +121,7 @@ export const RealtimeProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Domain Realtime Events
       const monitoredEvents = [
         'RENTAL_UPDATED',
+        'RENTAL_MESSAGE',
         'DISPUTE_UPDATED',
         'DISPUTE_MESSAGE',
         'DISPUTE_RESOLVED',
