@@ -9,18 +9,18 @@ import { logAudit } from '../middleware/audit.js';
 const router = Router();
 
 const registerSchema = z.object({
-  university_id: z.number().int().positive(),
+  university_id: z.number({ required_error: 'Please select a university' }).int().positive('Please select a valid university'),
   department_id: z.number().int().positive().optional(),
-  student_id: z.string().min(2).max(50),
-  full_name: z.string().min(2).max(150),
-  university_email: z.string().email().max(150),
-  password: z.string().min(6).max(100),
-  phone: z.string().max(30).optional(),
+  student_id: z.string().trim().min(2, 'Student ID must be at least 2 characters').max(50, 'Student ID cannot exceed 50 characters'),
+  full_name: z.string().trim().min(2, 'Full name must be at least 2 characters').max(150, 'Full name cannot exceed 150 characters'),
+  university_email: z.string().trim().email('Please enter a valid university email address').max(150, 'Email cannot exceed 150 characters'),
+  password: z.string().min(6, 'Password must be at least 6 characters long').max(100, 'Password cannot exceed 100 characters'),
+  phone: z.string().trim().max(30, 'Phone number cannot exceed 30 characters').optional(),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
 });
 
 // GET /api/auth/demo-users
@@ -124,7 +124,15 @@ router.post('/switch-persona', async (req, res) => {
 router.post('/register', async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    const firstErrorMessage = parsed.error.issues[0]?.message || 'Validation failed';
+    res.status(400).json({
+      error: firstErrorMessage,
+      details: parsed.error.format(),
+      issues: parsed.error.issues.map((i) => ({
+        field: i.path.join('.'),
+        message: i.message,
+      })),
+    });
     return;
   }
 
@@ -209,10 +217,18 @@ router.post('/register', async (req, res) => {
     });
   } catch (err: any) {
     if (err.code === '23505') {
-      res.status(409).json({ error: 'Email or Student ID is already registered' });
+      if (err.constraint === 'users_university_email_key' || err.detail?.includes('university_email')) {
+        res.status(409).json({ error: 'This university email is already registered. Please sign in instead.' });
+        return;
+      }
+      if (err.constraint === 'uq_university_student' || err.detail?.includes('student_id')) {
+        res.status(409).json({ error: 'This Student ID is already registered under the selected university.' });
+        return;
+      }
+      res.status(409).json({ error: 'An account with this Email or Student ID already exists.' });
       return;
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Registration failed' });
   }
 });
 
@@ -220,7 +236,8 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid email or password format' });
+    const firstErrorMessage = parsed.error.issues[0]?.message || 'Invalid email or password format';
+    res.status(400).json({ error: firstErrorMessage, details: parsed.error.format() });
     return;
   }
 

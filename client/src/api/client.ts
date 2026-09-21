@@ -44,7 +44,8 @@ async function request<T = any>(
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new ApiError(data.error || 'An unexpected error occurred', response.status, data);
+    const errorMsg = data.error || (Array.isArray(data.issues) && data.issues[0]?.message) || 'An unexpected error occurred';
+    throw new ApiError(errorMsg, response.status, data);
   }
 
   return data as T;

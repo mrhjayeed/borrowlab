@@ -3,12 +3,13 @@ import React, { InputHTMLAttributes, forwardRef, ReactNode } from 'react';
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  helperText?: string;
   leftIcon?: ReactNode;
   rightElement?: ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, leftIcon, rightElement, className = '', ...props }, ref) => {
+  ({ label, error, helperText, leftIcon, rightElement, className = '', ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
@@ -37,7 +38,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             </div>
           )}
         </div>
-        {error && <p className="mt-1 text-xs text-red-600 font-medium">{error}</p>}
+        {error ? (
+          <p className="mt-1 text-xs text-red-600 font-medium">{error}</p>
+        ) : helperText ? (
+          <p className="mt-1 text-xs text-slate-500">{helperText}</p>
+        ) : null}
       </div>
     );
   }
