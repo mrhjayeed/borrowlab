@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Cpu, Activity, CircuitBoard, Wrench, Boxes, ImageOff, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Cpu, Activity, CircuitBoard, Wrench, Boxes, Image as ImageIcon } from 'lucide-react';
 
 export interface HardwareImageProps {
   src?: string | null;
@@ -11,6 +11,7 @@ export interface HardwareImageProps {
   aspectRatio?: string;
   size?: 'sm' | 'md' | 'lg';
   showBadge?: boolean;
+  loading?: 'lazy' | 'eager';
 }
 
 export const HardwareImage: React.FC<HardwareImageProps> = ({
@@ -22,15 +23,41 @@ export const HardwareImage: React.FC<HardwareImageProps> = ({
   imgClassName = 'w-full h-full object-cover',
   size = 'md',
   showBadge = true,
+  loading = 'eager',
 }) => {
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // Reset state if src changes
+  const resolvedSrc = src?.startsWith('/uploads')
+    ? (import.meta.env.VITE_API_BASE
+        ? `${import.meta.env.VITE_API_BASE.replace(/\/api\/?$/, '')}${src}`
+        : src)
+    : src;
+
+  // Reset state if resolvedSrc changes and check if already complete in cache
   useEffect(() => {
     setHasError(false);
+    if (imgRef.current && imgRef.current.complete) {
+      if (imgRef.current.naturalWidth > 0) {
+        setIsLoaded(true);
+        return;
+      }
+    }
     setIsLoaded(false);
-  }, [src]);
+  }, [resolvedSrc]);
+
+  // Callback ref to instantly detect cached / completed images on mount during SPA routing
+  const handleImageRef = (node: HTMLImageElement | null) => {
+    imgRef.current = node;
+    if (node && node.complete) {
+      if (node.naturalWidth > 0) {
+        setIsLoaded(true);
+      } else if (node.naturalWidth === 0 && node.src) {
+        setHasError(true);
+      }
+    }
+  };
 
   // Determine category-specific engineering icon
   const getCategoryIcon = () => {
@@ -50,12 +77,6 @@ export const HardwareImage: React.FC<HardwareImageProps> = ({
     return <Boxes className="w-6 h-6 text-slate-600" />;
   };
 
-  const resolvedSrc = src?.startsWith('/uploads')
-    ? (import.meta.env.VITE_API_BASE
-        ? `${import.meta.env.VITE_API_BASE.replace(/\/api\/?$/, '')}${src}`
-        : src)
-    : src;
-
   const showPlaceholder = !resolvedSrc || hasError;
 
   return (
@@ -66,19 +87,21 @@ export const HardwareImage: React.FC<HardwareImageProps> = ({
       {resolvedSrc && !hasError && (
         <>
           {!isLoaded && (
-            <div className="absolute inset-0 bg-slate-100 flex items-center justify-center animate-pulse">
+            <div className="absolute inset-0 bg-slate-100 flex items-center justify-center animate-pulse z-1">
               <ImageIcon className="w-6 h-6 text-slate-300" />
             </div>
           )}
           <img
+            ref={handleImageRef}
             src={resolvedSrc}
             alt={alt}
+            decoding="async"
+            loading={loading}
             onLoad={() => setIsLoaded(true)}
             onError={() => setHasError(true)}
-            className={`${imgClassName} transition-opacity duration-300 ${
+            className={`${imgClassName} transition-opacity duration-200 ${
               isLoaded ? 'opacity-100' : 'opacity-0'
             }`}
-            loading="lazy"
           />
         </>
       )}
@@ -122,13 +145,6 @@ export const HardwareImage: React.FC<HardwareImageProps> = ({
               {inventoryCode}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Subtle Loading Pulse when image is fetching */}
-      {src && !isLoaded && !hasError && (
-        <div className="absolute inset-0 bg-slate-100 animate-pulse flex items-center justify-center">
-          <div className="w-8 h-8 rounded-lg bg-slate-200" />
         </div>
       )}
     </div>
