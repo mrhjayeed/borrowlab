@@ -47,14 +47,14 @@ export const LandingPage: React.FC = () => {
       {/* Hero Section */}
       <section className="relative pt-6 pb-12 overflow-hidden">
         <div className="max-w-4xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-200 text-[#4F46E5] text-xs font-semibold tracking-wide uppercase animate-in fade-in slide-in-from-top-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-[#4F46E5] text-xs font-semibold tracking-wide uppercase animate-in fade-in slide-in-from-top-2">
             <Zap className="w-3.5 h-3.5" />
-            Institutional P2P Hardware Lending
+            Campus Peer-to-Peer Hardware Exchange
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.15]">
-            Peer-to-Peer Academic Hardware
-            <span className="block text-[#4F46E5]">With Escrow-Backed Integrity</span>
+            Don’t buy it for one semester.
+            <span className="block text-[#4F46E5]">Borrow it from a senior.</span>
           </h1>
 
           <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">

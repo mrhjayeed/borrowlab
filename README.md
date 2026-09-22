@@ -1,5 +1,7 @@
 # BorrowLab — Peer-to-Peer Academic Hardware Lending Platform
 
+> *"Don’t buy it for one semester. Borrow it from a senior."*
+
 BorrowLab is a production-grade peer-to-peer academic hardware lending platform engineered for university campuses. It enables engineering students and lab researchers to share, reserve, and borrow specialized hardware (microcontrollers, FPGA boards, oscilloscopes, GPU dev kits, sensors, etc.) with strict transactional guarantees, escrow protection, reputation scoring, and dispute arbitration.
 
 ---
