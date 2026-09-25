@@ -19,6 +19,7 @@ import {
   GraduationCap,
   LogOut,
   Sparkles,
+  User as UserIcon,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -287,13 +288,21 @@ export const Topbar: React.FC = () => {
                     ))}
                   </div>
 
-                  <div className="border-t border-slate-100 mt-2 pt-2">
+                  <div className="border-t border-slate-100 mt-2 pt-2 space-y-1">
+                    <Link
+                      to="/profile"
+                      onClick={() => setShowPersonaMenu(false)}
+                      className="w-full flex items-center gap-2 p-2 rounded text-left text-xs text-slate-700 hover:bg-slate-50 font-medium transition-colors"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-slate-500" />
+                      Account & Profile Settings
+                    </Link>
                     <button
                       onClick={() => {
                         logout();
                         setShowPersonaMenu(false);
                       }}
-                      className="w-full flex items-center gap-2 p-2 rounded text-left text-xs text-red-600 hover:bg-red-50"
+                      className="w-full flex items-center gap-2 p-2 rounded text-left text-xs text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       Sign Out

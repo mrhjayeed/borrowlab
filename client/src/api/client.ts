@@ -134,6 +134,34 @@ export const api = {
     body: JSON.stringify(payload),
   }),
   getMe: () => request<{ user: any }>('/auth/me'),
+  updateProfile: (payload: {
+    full_name?: string;
+    phone?: string | null;
+    department_id?: number | null;
+    profile_image_url?: string | null;
+    student_id?: string;
+    current_password?: string;
+    new_password?: string;
+  }) =>
+    request<{ user: any; message: string }>('/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  getDeletionEligibility: () =>
+    request<{
+      canDelete: boolean;
+      blockers: string[];
+      activeRentalsCount: number;
+      activeRentals: any[];
+      escrowLockedTotal: number;
+      activeListingsCount: number;
+      availableInventoryCount: number;
+    }>('/auth/me/deletion-eligibility'),
+  deleteAccount: (payload?: { password?: string; confirmation?: string }) =>
+    request<{ success: boolean; message: string }>('/auth/me', {
+      method: 'DELETE',
+      body: JSON.stringify(payload || {}),
+    }),
 
   // Universities & Departments
   getUniversities: () => request<{ universities: any[] }>('/universities'),

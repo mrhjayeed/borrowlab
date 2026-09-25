@@ -28,6 +28,7 @@ import { MyListingsPage } from './pages/student/MyListingsPage';
 import { WalletPage } from './pages/student/WalletPage';
 import { DisputesPage } from './pages/student/DisputesPage';
 import { WaitlistPage } from './pages/student/WaitlistPage';
+import { ProfilePage } from './pages/student/ProfilePage';
 
 // Moderator Protected Pages
 import { DisputesQueuePage } from './pages/moderator/DisputesQueuePage';
@@ -164,6 +165,18 @@ export const App: React.FC = () => {
                       <WaitlistPage />
                     </ProtectedRoute>
                   }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={<Navigate to="/profile" replace />}
                 />
 
                 {/* Moderator Routes */}

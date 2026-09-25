@@ -52,7 +52,10 @@ const FIELD_LABELS: Record<string, string> = {
   university_email: 'University Email',
   email: 'Email Address',
   password: 'Password',
+  current_password: 'Current Password',
+  new_password: 'New Password',
   phone: 'Phone Number',
+  profile_image_url: 'Profile Image URL',
 
   // Rental & Return
   listing_id: 'Listing Reference',

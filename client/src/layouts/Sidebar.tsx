@@ -16,6 +16,7 @@ import {
   FileText,
   Boxes,
   Compass,
+  User,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -96,6 +97,10 @@ export const Sidebar: React.FC = () => {
             <NavLink to="/waitlist" className={linkClass}>
               <Clock className="w-4 h-4 text-slate-500" />
               <span>Waitlist</span>
+            </NavLink>
+            <NavLink to="/profile" className={linkClass}>
+              <User className="w-4 h-4 text-slate-500" />
+              <span>Account & Profile</span>
             </NavLink>
           </div>
         </div>
