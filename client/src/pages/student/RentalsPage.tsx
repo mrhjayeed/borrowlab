@@ -26,6 +26,8 @@ import {
   UploadCloud,
   X,
   Loader2,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 export const RentalsPage: React.FC = () => {
@@ -57,9 +59,17 @@ export const RentalsPage: React.FC = () => {
 
   // Review Modal state
   const [reviewModalRental, setReviewModalRental] = useState<Rental | null>(null);
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null);
   const [rating, setRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Review Deletion state
+  const [deleteConfirmReview, setDeleteConfirmReview] = useState<{
+    reviewId: number;
+    rentalTitle: string;
+  } | null>(null);
+  const [isDeletingReview, setIsDeletingReview] = useState(false);
 
   // Cancellation Modal state
   const [cancelModalRental, setCancelModalRental] = useState<Rental | null>(null);
@@ -208,6 +218,21 @@ export const RentalsPage: React.FC = () => {
     }
   };
 
+  const handleOpenCreateReview = (rental: Rental) => {
+    setEditingReviewId(null);
+    setRating(5);
+    setReviewComment('');
+    setReviewModalRental(rental);
+  };
+
+  const handleOpenEditReview = (rental: Rental) => {
+    if (!rental.my_review) return;
+    setEditingReviewId(rental.my_review.review_id);
+    setRating(rental.my_review.rating);
+    setReviewComment(rental.my_review.comment || '');
+    setReviewModalRental(rental);
+  };
+
   const handleReviewSubmit = async () => {
     if (!reviewModalRental) return;
     if (reviewComment.trim().length < 5) {
@@ -216,19 +241,43 @@ export const RentalsPage: React.FC = () => {
     }
     setIsSubmittingReview(true);
     try {
-      await api.createReview({
-        rental_id: reviewModalRental.rental_id,
-        rating,
-        comment: reviewComment.trim(),
-      });
-      success('Review published', 'Thank you for contributing to campus trust reputation.');
+      if (editingReviewId) {
+        await api.updateReview(editingReviewId, {
+          rating,
+          comment: reviewComment.trim(),
+        });
+        success('Review updated', 'Your feedback and reputation rating have been revised.');
+      } else {
+        await api.createReview({
+          rental_id: reviewModalRental.rental_id,
+          rating,
+          comment: reviewComment.trim(),
+        });
+        success('Review published', 'Thank you for contributing to campus trust reputation.');
+      }
       setReviewModalRental(null);
+      setEditingReviewId(null);
       setReviewComment('');
       fetchRentals();
     } catch (err: any) {
       error(err.message || 'Failed to submit review');
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!deleteConfirmReview) return;
+    setIsDeletingReview(true);
+    try {
+      await api.deleteReview(deleteConfirmReview.reviewId);
+      success('Review deleted', 'Your review was removed and peer trust score adjusted.');
+      setDeleteConfirmReview(null);
+      fetchRentals();
+    } catch (err: any) {
+      error(err.message || 'Failed to delete review');
+    } finally {
+      setIsDeletingReview(false);
     }
   };
 
@@ -465,27 +514,49 @@ export const RentalsPage: React.FC = () => {
                     {rental.status === 'COMPLETED' && (
                       <div className="flex flex-wrap items-center gap-2">
                         {rental.my_review ? (
-                          <div
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium"
-                            title={`Your review: "${rental.my_review.comment}"`}
-                          >
-                            <div className="flex items-center text-amber-500">
-                              {[...Array(rental.my_review.rating)].map((_, i) => (
-                                <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                              ))}
+                          <div className="flex items-center gap-1.5 p-1 rounded-lg bg-emerald-50/70 border border-emerald-200">
+                            <div
+                              className="flex items-center gap-1.5 px-2 py-1 text-emerald-800 text-xs font-medium cursor-default"
+                              title={`Your review: "${rental.my_review.comment}"`}
+                            >
+                              <div className="flex items-center text-amber-500">
+                                {[...Array(rental.my_review.rating)].map((_, i) => (
+                                  <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                ))}
+                              </div>
+                              <span>Reviewed ({rental.my_review.rating}/5)</span>
                             </div>
-                            <span>Reviewed ({rental.my_review.rating}/5)</span>
+
+                            <div className="flex items-center border-l border-emerald-200 pl-1 gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditReview(rental)}
+                                className="p-1 rounded text-slate-500 hover:text-[#4F46E5] hover:bg-white transition-colors"
+                                title="Edit your review"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDeleteConfirmReview({
+                                    reviewId: rental.my_review!.review_id,
+                                    rentalTitle: rental.component_name || rental.listing_title,
+                                  })
+                                }
+                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Delete your review"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <Button
                             variant="outline"
                             size="sm"
                             className="text-[#4F46E5] border-indigo-200 hover:bg-indigo-50 gap-1.5"
-                            onClick={() => {
-                              setRating(5);
-                              setReviewComment('');
-                              setReviewModalRental(rental);
-                            }}
+                            onClick={() => handleOpenCreateReview(rental)}
                           >
                             <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                             Leave Peer Review
@@ -708,9 +779,12 @@ export const RentalsPage: React.FC = () => {
       {/* Review Modal */}
       <Modal
         isOpen={!!reviewModalRental}
-        onClose={() => setReviewModalRental(null)}
-        title="Submit Peer Review"
-        subtitle={`Rental #${reviewModalRental?.rental_id}`}
+        onClose={() => {
+          setReviewModalRental(null);
+          setEditingReviewId(null);
+        }}
+        title={editingReviewId ? 'Edit Your Peer Review' : 'Submit Peer Review'}
+        subtitle={`Rental #${reviewModalRental?.rental_id} • ${reviewModalRental?.component_name}`}
         maxWidth="sm"
       >
         <div className="space-y-4">
@@ -759,7 +833,13 @@ export const RentalsPage: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button variant="secondary" onClick={() => setReviewModalRental(null)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReviewModalRental(null);
+                setEditingReviewId(null);
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -768,7 +848,47 @@ export const RentalsPage: React.FC = () => {
               disabled={reviewComment.trim().length < 5}
               onClick={handleReviewSubmit}
             >
-              Publish Review
+              {editingReviewId ? 'Save Changes' : 'Publish Review'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Review Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteConfirmReview}
+        onClose={() => setDeleteConfirmReview(null)}
+        title="Delete Your Review?"
+        subtitle={deleteConfirmReview?.rentalTitle || 'Peer review'}
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-rose-900">Are you sure you want to remove your review?</p>
+              <p className="mt-1 text-rose-700">
+                This will delete your public rating and comment, and the trust reputation adjustment previously applied to your peer will be reversed.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteConfirmReview(null)}
+              disabled={isDeletingReview}
+            >
+              Keep Review
+            </Button>
+            <Button
+              variant="destructive"
+              isLoading={isDeletingReview}
+              onClick={handleDeleteReview}
+              className="gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Review
             </Button>
           </div>
         </div>

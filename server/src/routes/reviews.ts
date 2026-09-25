@@ -13,6 +13,18 @@ const createReviewSchema = z.object({
   comment: z.string().trim().min(5, 'Review comment must be at least 5 characters'),
 });
 
+const updateReviewSchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5),
+  comment: z.string().trim().min(5, 'Review comment must be at least 5 characters'),
+});
+
+const calculateTrustDelta = (rating: number): number => {
+  if (rating === 5) return 2.0;
+  if (rating === 4) return 1.0;
+  if (rating === 3) return 0.0;
+  return -5.0; // rating 1 or 2
+};
+
 // POST /api/reviews
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createReviewSchema.safeParse(req.body);
@@ -68,10 +80,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
       );
 
       // Trust score adjustment based on rating
-      let scoreDelta = 0;
-      if (rating === 5) scoreDelta = 2.0;
-      else if (rating === 4) scoreDelta = 1.0;
-      else if (rating <= 2) scoreDelta = -5.0;
+      const scoreDelta = calculateTrustDelta(rating);
 
       if (scoreDelta !== 0) {
         await client.query(
@@ -117,6 +126,168 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     }
 
     res.status(201).json({ review });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/reviews/:id (Edit Review)
+router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const reviewId = Number(req.params.id);
+  if (!reviewId || isNaN(reviewId)) {
+    res.status(400).json({ error: 'Invalid review ID' });
+    return;
+  }
+
+  const parsed = updateReviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    return;
+  }
+
+  const { rating, comment } = parsed.data;
+
+  try {
+    const existingRes = await query('SELECT * FROM reviews WHERE review_id = $1', [reviewId]);
+    if (existingRes.rows.length === 0) {
+      res.status(404).json({ error: 'Review not found' });
+      return;
+    }
+
+    const review = existingRes.rows[0];
+
+    // Only the reviewer (author) can edit their review
+    if (Number(review.reviewer_id) !== Number(req.user!.userId)) {
+      res.status(403).json({ error: 'You are only allowed to edit reviews you created' });
+      return;
+    }
+
+    const oldRating = review.rating;
+    const oldDelta = calculateTrustDelta(oldRating);
+    const newDelta = calculateTrustDelta(rating);
+    const netDelta = newDelta - oldDelta;
+
+    const updatedReview = await withTransaction(async (client) => {
+      if (netDelta !== 0) {
+        await client.query(
+          'UPDATE users SET trust_score = LEAST(100.0, GREATEST(0.0, trust_score + $1)), updated_at = NOW() WHERE user_id = $2',
+          [netDelta, review.reviewee_id]
+        );
+      }
+
+      const updateRes = await client.query(
+        `UPDATE reviews
+         SET rating = $1, comment = $2, updated_at = NOW()
+         WHERE review_id = $3
+         RETURNING *`,
+        [rating, comment, reviewId]
+      );
+
+      await logAudit(client, req.user!.userId, 'UPDATE', 'reviews', reviewId, {
+        rating: review.rating,
+        comment: review.comment,
+      }, {
+        rating,
+        comment,
+      });
+
+      return updateRes.rows[0];
+    });
+
+    // Notify participants & send realtime events
+    try {
+      const rentalRes = await query('SELECT borrower_id, owner_id FROM rentals WHERE rental_id = $1', [review.rental_id]);
+      if (rentalRes.rows.length > 0) {
+        const rental = rentalRes.rows[0];
+        realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+          rental_id: review.rental_id,
+        });
+      }
+
+      realtime.sendToUser(review.reviewee_id, 'NOTIFICATION', {
+        title: 'Peer Review Updated',
+        message: `${req.user!.fullName} updated their review for Rental #${review.rental_id}.`,
+        related_rental_id: review.rental_id,
+      });
+      realtime.sendToUser(review.reviewee_id, 'WALLET_UPDATED', {
+        user_id: review.reviewee_id,
+      });
+    } catch (notifErr) {
+      console.error('Failed to dispatch update review notifications:', notifErr);
+    }
+
+    res.json({ review: updatedReview });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/reviews/:id (Delete Review)
+router.delete('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const reviewId = Number(req.params.id);
+  if (!reviewId || isNaN(reviewId)) {
+    res.status(400).json({ error: 'Invalid review ID' });
+    return;
+  }
+
+  try {
+    const existingRes = await query('SELECT * FROM reviews WHERE review_id = $1', [reviewId]);
+    if (existingRes.rows.length === 0) {
+      res.status(404).json({ error: 'Review not found' });
+      return;
+    }
+
+    const review = existingRes.rows[0];
+
+    // Check authorization: author or moderator/admin
+    const isAuthor = Number(review.reviewer_id) === Number(req.user!.userId);
+    const isStaff = req.user!.roles?.some((r: string) => ['ADMIN', 'MODERATOR'].includes(r));
+
+    if (!isAuthor && !isStaff) {
+      res.status(403).json({ error: 'You are not authorized to delete this review' });
+      return;
+    }
+
+    const oldDelta = calculateTrustDelta(review.rating);
+    const reversalDelta = -oldDelta;
+
+    await withTransaction(async (client) => {
+      // Revert trust score impact
+      if (reversalDelta !== 0) {
+        await client.query(
+          'UPDATE users SET trust_score = LEAST(100.0, GREATEST(0.0, trust_score + $1)), updated_at = NOW() WHERE user_id = $2',
+          [reversalDelta, review.reviewee_id]
+        );
+      }
+
+      await client.query('DELETE FROM reviews WHERE review_id = $1', [reviewId]);
+
+      await logAudit(client, req.user!.userId, 'DELETE', 'reviews', reviewId, {
+        rating: review.rating,
+        comment: review.comment,
+        rental_id: review.rental_id,
+        reviewee_id: review.reviewee_id,
+      }, null);
+    });
+
+    // Notify participants & send realtime events
+    try {
+      const rentalRes = await query('SELECT borrower_id, owner_id FROM rentals WHERE rental_id = $1', [review.rental_id]);
+      if (rentalRes.rows.length > 0) {
+        const rental = rentalRes.rows[0];
+        realtime.sendToUsers([rental.borrower_id, rental.owner_id], 'RENTAL_UPDATED', {
+          rental_id: review.rental_id,
+        });
+      }
+
+      realtime.sendToUser(review.reviewee_id, 'WALLET_UPDATED', {
+        user_id: review.reviewee_id,
+      });
+    } catch (notifErr) {
+      console.error('Failed to dispatch delete review notifications:', notifErr);
+    }
+
+    res.json({ message: 'Review deleted successfully', review_id: reviewId });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

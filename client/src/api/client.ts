@@ -240,6 +240,10 @@ export const api = {
   // Reviews
   createReview: (payload: { rental_id: number; rating: number; comment: string }) =>
     request<{ review: any }>('/reviews', { method: 'POST', body: JSON.stringify(payload) }),
+  updateReview: (reviewId: number | string, payload: { rating: number; comment: string }) =>
+    request<{ review: any }>(`/reviews/${reviewId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteReview: (reviewId: number | string) =>
+    request<{ message: string; review_id: number }>(`/reviews/${reviewId}`, { method: 'DELETE' }),
   getUserReviews: (userId: number | string) => request<{ reviews: any[] }>(`/reviews/user/${userId}`),
 
   // Waitlist

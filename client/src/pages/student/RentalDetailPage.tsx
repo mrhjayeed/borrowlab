@@ -30,6 +30,8 @@ import {
   ExternalLink,
   XCircle,
   Play,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 export const RentalDetailPage: React.FC = () => {
@@ -42,9 +44,15 @@ export const RentalDetailPage: React.FC = () => {
 
   // Review Modal State
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Review Delete Confirmation State
+  const [isDeleteReviewModalOpen, setIsDeleteReviewModalOpen] = useState(false);
+  const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
+  const [isDeletingReview, setIsDeletingReview] = useState(false);
 
   // Cancellation Modal State
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -89,6 +97,20 @@ export const RentalDetailPage: React.FC = () => {
     }
   }, [id]);
 
+  const handleOpenCreateReview = () => {
+    setEditingReviewId(null);
+    setReviewRating(5);
+    setReviewComment('');
+    setIsReviewModalOpen(true);
+  };
+
+  const handleOpenEditReview = (reviewId: number, rating: number, comment: string) => {
+    setEditingReviewId(reviewId);
+    setReviewRating(rating);
+    setReviewComment(comment || '');
+    setIsReviewModalOpen(true);
+  };
+
   const handleReviewSubmit = async () => {
     if (!rental) return;
     if (reviewComment.trim().length < 5) {
@@ -97,19 +119,49 @@ export const RentalDetailPage: React.FC = () => {
     }
     setIsSubmittingReview(true);
     try {
-      await api.createReview({
-        rental_id: rental.rental_id,
-        rating: reviewRating,
-        comment: reviewComment.trim(),
-      });
-      success('Review published', 'Thank you for contributing to campus trust reputation.');
+      if (editingReviewId) {
+        await api.updateReview(editingReviewId, {
+          rating: reviewRating,
+          comment: reviewComment.trim(),
+        });
+        success('Review updated', 'Your feedback and reputation rating have been revised.');
+      } else {
+        await api.createReview({
+          rental_id: rental.rental_id,
+          rating: reviewRating,
+          comment: reviewComment.trim(),
+        });
+        success('Review published', 'Thank you for contributing to campus trust reputation.');
+      }
       setIsReviewModalOpen(false);
+      setEditingReviewId(null);
       setReviewComment('');
       loadRental();
     } catch (err: any) {
       error(err.message || 'Failed to submit review');
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handlePromptDeleteReview = (reviewId: number) => {
+    setDeletingReviewId(reviewId);
+    setIsDeleteReviewModalOpen(true);
+  };
+
+  const handleConfirmDeleteReview = async () => {
+    if (!deletingReviewId) return;
+    setIsDeletingReview(true);
+    try {
+      await api.deleteReview(deletingReviewId);
+      success('Review deleted', 'Your review was removed and peer trust score adjusted.');
+      setIsDeleteReviewModalOpen(false);
+      setDeletingReviewId(null);
+      loadRental();
+    } catch (err: any) {
+      error(err.message || 'Failed to delete review');
+    } finally {
+      setIsDeletingReview(false);
     }
   };
 
@@ -706,24 +758,46 @@ export const RentalDetailPage: React.FC = () => {
               {rental.status === 'COMPLETED' && (
                 <div>
                   {rental.my_review ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[6px] bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
-                      <div className="flex items-center text-amber-500">
-                        {[...Array(rental.my_review.rating)].map((_, i) => (
-                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        ))}
-                      </div>
-                      Reviewed ({rental.my_review.rating}/5)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[6px] bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+                        <div className="flex items-center text-amber-500">
+                          {[...Array(rental.my_review.rating)].map((_, i) => (
+                            <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                          ))}
+                        </div>
+                        Reviewed ({rental.my_review.rating}/5)
+                      </span>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-600 hover:text-[#4F46E5] h-7 px-2 text-xs gap-1 border border-slate-200 hover:bg-slate-50"
+                        onClick={() =>
+                          handleOpenEditReview(
+                            rental.my_review.review_id,
+                            rental.my_review.rating,
+                            rental.my_review.comment
+                          )
+                        }
+                      >
+                        <Pencil className="w-3 h-3" /> Edit
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-500 hover:text-rose-600 h-7 px-2 text-xs gap-1 border border-slate-200 hover:bg-rose-50"
+                        onClick={() => handlePromptDeleteReview(rental.my_review.review_id)}
+                      >
+                        <Trash2 className="w-3 h-3" /> Delete
+                      </Button>
+                    </div>
                   ) : (
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-[#4F46E5] border-indigo-200 hover:bg-indigo-50 gap-1.5"
-                      onClick={() => {
-                        setReviewRating(5);
-                        setReviewComment('');
-                        setIsReviewModalOpen(true);
-                      }}
+                      onClick={handleOpenCreateReview}
                     >
                       <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                       Leave Peer Review
@@ -749,19 +823,47 @@ export const RentalDetailPage: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center text-amber-500">
-                        {[...Array(rev.rating)].map((_, i) => (
-                          <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        ))}
-                        <span className="ml-1 text-[11px] font-mono text-slate-500">
-                          {rev.rating}/5
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center text-amber-500">
+                          {[...Array(rev.rating)].map((_, i) => (
+                            <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          ))}
+                          <span className="ml-1 text-[11px] font-mono text-slate-500">
+                            {rev.rating}/5
+                          </span>
+                        </div>
+
+                        {Number(rev.reviewer_id) === Number(user?.userId) && (
+                          <div className="flex items-center gap-1 ml-2 border-l border-slate-200 pl-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditReview(rev.review_id, rev.rating, rev.comment)}
+                              className="p-1 rounded text-slate-400 hover:text-[#4F46E5] hover:bg-white transition-colors"
+                              title="Edit review"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePromptDeleteReview(rev.review_id)}
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete review"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <p className="text-xs text-slate-700 leading-relaxed">{rev.comment}</p>
-                    <div className="text-[10px] text-slate-400">
-                      {new Date(rev.created_at).toLocaleDateString()} at{' '}
-                      {new Date(rev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5 font-mono">
+                      <span>
+                        {new Date(rev.created_at).toLocaleDateString()} at{' '}
+                        {new Date(rev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {rev.updated_at && (
+                        <span className="text-slate-400 italic font-sans">(edited)</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -861,8 +963,11 @@ export const RentalDetailPage: React.FC = () => {
       {/* Review Modal */}
       <Modal
         isOpen={isReviewModalOpen}
-        onClose={() => setIsReviewModalOpen(false)}
-        title="Submit Peer Review"
+        onClose={() => {
+          setIsReviewModalOpen(false);
+          setEditingReviewId(null);
+        }}
+        title={editingReviewId ? 'Edit Your Peer Review' : 'Submit Peer Review'}
         subtitle={`Rental #${rental?.rental_id} • ${rental?.component_name}`}
         maxWidth="sm"
       >
@@ -901,9 +1006,70 @@ export const RentalDetailPage: React.FC = () => {
             />
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button variant="secondary" onClick={() => setIsReviewModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" isLoading={isSubmittingReview} disabled={reviewComment.trim().length < 5} onClick={handleReviewSubmit}>
-              Publish Review
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsReviewModalOpen(false);
+                setEditingReviewId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              isLoading={isSubmittingReview}
+              disabled={reviewComment.trim().length < 5}
+              onClick={handleReviewSubmit}
+            >
+              {editingReviewId ? 'Save Changes' : 'Publish Review'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Review Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteReviewModalOpen}
+        onClose={() => {
+          if (!isDeletingReview) {
+            setIsDeleteReviewModalOpen(false);
+            setDeletingReviewId(null);
+          }
+        }}
+        title="Delete Your Review?"
+        subtitle="Permanent removal of rating"
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-rose-900">Are you sure you want to remove your review?</p>
+              <p className="mt-1 text-rose-700">
+                This will delete your review and reverse the trust reputation adjustment previously given to your peer.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsDeleteReviewModalOpen(false);
+                setDeletingReviewId(null);
+              }}
+              disabled={isDeletingReview}
+            >
+              Keep Review
+            </Button>
+            <Button
+              variant="destructive"
+              isLoading={isDeletingReview}
+              onClick={handleConfirmDeleteReview}
+              className="gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Review
             </Button>
           </div>
         </div>

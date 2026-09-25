@@ -198,6 +198,7 @@ export interface Rental {
     rating: number;
     comment: string;
     created_at: string;
+    updated_at?: string;
   } | null;
   peer_review?: {
     review_id: number;
@@ -205,8 +206,23 @@ export interface Rental {
     comment: string;
     reviewer_name?: string;
     created_at: string;
+    updated_at?: string;
   } | null;
+  reviews?: RentalReview[];
   messages?: RentalMessage[];
+}
+
+export interface RentalReview {
+  review_id: number;
+  rental_id: number;
+  reviewer_id: number;
+  reviewee_id: number;
+  reviewer_name?: string;
+  rating: number;
+  comment: string;
+  status: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface RentalMessage {
