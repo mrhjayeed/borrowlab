@@ -2,20 +2,21 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { query } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const joinWaitlistSchema = z.object({
-  component_id: z.coerce.number().int().positive(),
+  component_id: z.coerce.number().int().positive('Please select a valid hardware model'),
   requested_start_date: z.string().optional(),
-  requested_duration_days: z.coerce.number().int().positive().optional(),
+  requested_duration_days: z.coerce.number().int().positive('Requested duration must be at least 1 day').optional(),
 });
 
 // POST /api/waitlist
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = joinWaitlistSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

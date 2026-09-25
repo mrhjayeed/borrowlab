@@ -85,8 +85,10 @@ app.use('/api/events', eventsRouter);
 // Global Error Handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled Server Error:', err);
+  const message = err.message || 'Internal Server Error';
   res.status(err.status || 500).json({
-    error: err.message || 'Internal Server Error',
+    error: message,
+    reason: err.reason || message,
   });
 });
 

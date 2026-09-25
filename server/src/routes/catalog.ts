@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
@@ -32,14 +33,14 @@ router.get('/categories', async (_req, res) => {
 // POST /api/catalog/categories
 router.post('/categories', authenticateToken, async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
-    name: z.string().min(2).max(100),
+    name: z.string({ invalid_type_error: 'Category name must be text' }).trim().min(2, 'Category name must be at least 2 characters').max(100),
     description: z.string().optional(),
     parent_category_id: z.number().int().positive().nullable().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -139,10 +140,10 @@ router.get('/components/:id', async (req, res) => {
 // POST /api/catalog/components (Open to all authenticated campus peers)
 router.post('/components', authenticateToken, async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
-    category_id: z.number().int().positive(),
+    category_id: z.number({ invalid_type_error: 'Please select a valid hardware category' }).int().positive('Please select a valid hardware category'),
     manufacturer: z.string().max(100).optional(),
-    model: z.string().min(1).max(120),
-    component_name: z.string().min(2).max(150),
+    model: z.string({ invalid_type_error: 'Model number/code is required' }).trim().min(1, 'Model number/code cannot be empty').max(120),
+    component_name: z.string({ invalid_type_error: 'Device model name is required' }).trim().min(2, 'Device model name must be at least 2 characters').max(150),
     description: z.string().optional(),
     specifications: z.string().optional(),
     default_rental_period_days: z.number().int().positive().default(7),
@@ -150,7 +151,7 @@ router.post('/components', authenticateToken, async (req: AuthenticatedRequest, 
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

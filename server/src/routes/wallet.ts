@@ -4,11 +4,12 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const depositSchema = z.object({
-  amount: z.number().positive().max(100000),
+  amount: z.number({ invalid_type_error: 'Deposit amount must be a valid number' }).positive('Deposit amount must be greater than 0 BDT').max(100000, 'Deposit amount cannot exceed 100,000 BDT'),
   description: z.string().optional(),
 });
 
@@ -45,7 +46,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
 router.post('/deposit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = depositSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid deposit amount', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

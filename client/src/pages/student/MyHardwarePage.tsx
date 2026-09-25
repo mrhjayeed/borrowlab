@@ -56,6 +56,16 @@ export const MyHardwarePage: React.FC = () => {
     { accessory_name: 'Power Cable / Adapter', quantity: 1, replacement_value: 500, is_required: true },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
+  };
 
   // In-flow Custom Model Creation State
   const [isAddingCustomModel, setIsAddingCustomModel] = useState(false);
@@ -100,6 +110,7 @@ export const MyHardwarePage: React.FC = () => {
     if (!inventoryCode) {
       setInventoryCode(generateAssetCode());
     }
+    setFormErrors({});
     setIsAddModalOpen(true);
   };
 
@@ -237,19 +248,55 @@ export const MyHardwarePage: React.FC = () => {
 
   const handleCreateHardware = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: Record<string, string> = {};
+
     if (!componentId) {
-      error('Please select or add a hardware model');
-      return;
+      errors.component_id = 'Please select a hardware model from catalog or add a new device';
     }
     if (!inventoryCode.trim()) {
-      error('Asset tag ID is required');
-      return;
+      errors.inventory_code = 'Asset tag ID is required';
+    } else if (inventoryCode.trim().length > 50) {
+      errors.inventory_code = 'Asset tag ID cannot exceed 50 characters';
     }
+
+    const parsedVal = parseFloat(replacementValue);
+    if (!replacementValue.trim() || isNaN(parsedVal)) {
+      errors.replacement_value = 'Replacement value must be a valid number';
+    } else if (parsedVal <= 0) {
+      errors.replacement_value = 'Replacement value must be greater than 0 BDT';
+    }
+
+    if (publishImmediately) {
+      const parsedRent = parseFloat(listingRent);
+      if (!listingRent.trim() || isNaN(parsedRent) || parsedRent <= 0) {
+        errors.weekly_rent = 'Weekly rent must be greater than 0 BDT';
+      }
+      const minD = parseInt(listingMinDays, 10);
+      const maxD = parseInt(listingMaxDays, 10);
+      if (isNaN(minD) || minD < 1) {
+        errors.min_days = 'Minimum rental duration must be at least 1 day';
+      }
+      if (isNaN(maxD) || maxD < 1) {
+        errors.max_days = 'Maximum rental duration must be at least 1 day';
+      }
+      if (!isNaN(minD) && !isNaN(maxD) && maxD < minD) {
+        errors.max_days = 'Maximum duration cannot be less than minimum duration';
+      }
+    }
+
     if (isUploadingPhoto) {
-      error('Photo is still uploading, please wait a moment');
+      error('Photo is still uploading', 'Please wait for your equipment photo upload to finish');
       return;
     }
 
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      const firstField = Object.keys(errors)[0];
+      error('Validation Failed', errors[firstField]);
+      return;
+    }
+
+    setFormErrors({});
     setIsSubmitting(true);
     try {
       const payload: any = {
@@ -257,7 +304,7 @@ export const MyHardwarePage: React.FC = () => {
         inventory_code: inventoryCode.trim(),
         serial_number: serialNumber.trim() || undefined,
         condition,
-        replacement_value: parseFloat(replacementValue),
+        replacement_value: parsedVal,
         current_location: location.trim() || undefined,
         description: description.trim() || undefined,
         image_url: imageUrl.trim() || undefined,
@@ -288,9 +335,26 @@ export const MyHardwarePage: React.FC = () => {
       // Reset form
       setInventoryCode('');
       setSerialNumber('');
+      setFormErrors({});
       handleClearSelectedPhoto();
       fetchInventory();
     } catch (err: any) {
+      // Map server API issues directly to form fields for inline display
+      if (err.issues && Array.isArray(err.issues)) {
+        const serverFieldErrors: Record<string, string> = {};
+        for (const issue of err.issues) {
+          if (issue.field) {
+            serverFieldErrors[issue.field] = issue.message;
+            if (issue.field.includes('.')) {
+              const lastKey = issue.field.split('.').pop()!;
+              serverFieldErrors[lastKey] = issue.message;
+            }
+          }
+        }
+        if (Object.keys(serverFieldErrors).length > 0) {
+          setFormErrors((prev) => ({ ...prev, ...serverFieldErrors }));
+        }
+      }
       error(err.message || 'Failed to register hardware');
     } finally {
       setIsSubmitting(false);
@@ -448,8 +512,15 @@ export const MyHardwarePage: React.FC = () => {
                 </label>
                 <select
                   value={componentId}
-                  onChange={(e) => setComponentId(Number(e.target.value) || '')}
-                  className="w-full h-[40px] bg-white border border-slate-300 rounded-lg px-3 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+                  onChange={(e) => {
+                    setComponentId(Number(e.target.value) || '');
+                    clearFieldError('component_id');
+                  }}
+                  className={`w-full h-[40px] bg-white border rounded-lg px-3 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none shadow-xs ${
+                    formErrors.component_id
+                      ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
+                      : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'
+                  }`}
                   required
                 >
                   <option value="">-- Select Hardware Model from University Catalog --</option>
@@ -459,6 +530,11 @@ export const MyHardwarePage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {formErrors.component_id && (
+                  <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {formErrors.component_id}
+                  </p>
+                )}
                 <p className="text-[11px] text-slate-500 mt-1">
                   Choose from pre-seeded lab equipment or click "Add New Device" to define a custom hardware model.
                 </p>
@@ -609,20 +685,35 @@ export const MyHardwarePage: React.FC = () => {
                   <input
                     type="text"
                     value={inventoryCode}
-                    onChange={(e) => setInventoryCode(e.target.value)}
+                    onChange={(e) => {
+                      setInventoryCode(e.target.value);
+                      clearFieldError('inventory_code');
+                    }}
                     placeholder="e.g. BL-UIU-7X4K"
-                    className="w-full h-[40px] font-mono font-bold text-indigo-950 bg-white border border-slate-300 rounded-lg pl-3 pr-24 text-sm focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+                    className={`w-full h-[40px] font-mono font-bold text-indigo-950 bg-white border rounded-lg pl-3 pr-24 text-sm focus:outline-none shadow-xs ${
+                      formErrors.inventory_code
+                        ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'
+                    }`}
                     required
                   />
                   <button
                     type="button"
-                    onClick={() => setInventoryCode(generateAssetCode())}
+                    onClick={() => {
+                      setInventoryCode(generateAssetCode());
+                      clearFieldError('inventory_code');
+                    }}
                     className="absolute right-1.5 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md border border-indigo-200/80 flex items-center gap-1 transition-colors"
                     title="Generate a new random unique asset tag"
                   >
                     <RefreshCw className="w-3 h-3" /> Auto
                   </button>
                 </div>
+                {formErrors.inventory_code && (
+                  <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {formErrors.inventory_code}
+                  </p>
+                )}
                 <p className="text-[11px] text-slate-500 mt-1">Unique campus tracking code assigned to this unit.</p>
               </div>
 
@@ -679,12 +770,24 @@ export const MyHardwarePage: React.FC = () => {
                   <input
                     type="number"
                     value={replacementValue}
-                    onChange={(e) => setReplacementValue(e.target.value)}
+                    onChange={(e) => {
+                      setReplacementValue(e.target.value);
+                      clearFieldError('replacement_value');
+                    }}
                     required
-                    className="w-full h-[40px] bg-white border border-slate-300 rounded-lg pl-7 pr-12 text-sm font-mono font-semibold text-slate-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+                    className={`w-full h-[40px] bg-white border rounded-lg pl-7 pr-12 text-sm font-mono font-semibold text-slate-900 focus:outline-none shadow-xs ${
+                      formErrors.replacement_value
+                        ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
+                        : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'
+                    }`}
                   />
                   <span className="absolute right-3 text-xs font-semibold text-slate-400">BDT</span>
                 </div>
+                {formErrors.replacement_value && (
+                  <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {formErrors.replacement_value}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -974,13 +1077,25 @@ export const MyHardwarePage: React.FC = () => {
                       <input
                         type="number"
                         value={listingRent}
-                        onChange={(e) => setListingRent(e.target.value)}
+                        onChange={(e) => {
+                          setListingRent(e.target.value);
+                          clearFieldError('weekly_rent');
+                        }}
                         placeholder="500"
                         required={publishImmediately}
-                        className="w-full h-[40px] bg-white border border-slate-300 rounded-lg pl-7 pr-14 text-sm font-mono font-bold text-indigo-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+                        className={`w-full h-[40px] bg-white border rounded-lg pl-7 pr-14 text-sm font-mono font-bold text-indigo-950 focus:outline-none shadow-xs ${
+                          formErrors.weekly_rent
+                            ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
+                            : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'
+                        }`}
                       />
                       <span className="absolute right-3 text-[11px] font-semibold text-slate-400">/ week</span>
                     </div>
+                    {formErrors.weekly_rent && (
+                      <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {formErrors.weekly_rent}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -990,10 +1105,23 @@ export const MyHardwarePage: React.FC = () => {
                     <input
                       type="number"
                       value={listingMinDays}
-                      onChange={(e) => setListingMinDays(e.target.value)}
+                      onChange={(e) => {
+                        setListingMinDays(e.target.value);
+                        clearFieldError('min_days');
+                        clearFieldError('max_days');
+                      }}
                       placeholder="1"
-                      className="w-full h-[40px] bg-white border border-slate-300 rounded-lg px-3 text-sm font-mono text-slate-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+                      className={`w-full h-[40px] bg-white border rounded-lg px-3 text-sm font-mono text-slate-900 focus:outline-none shadow-xs ${
+                        formErrors.min_days
+                          ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
+                          : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'
+                      }`}
                     />
+                    {formErrors.min_days && (
+                      <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {formErrors.min_days}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1003,10 +1131,22 @@ export const MyHardwarePage: React.FC = () => {
                     <input
                       type="number"
                       value={listingMaxDays}
-                      onChange={(e) => setListingMaxDays(e.target.value)}
+                      onChange={(e) => {
+                        setListingMaxDays(e.target.value);
+                        clearFieldError('max_days');
+                      }}
                       placeholder="30"
-                      className="w-full h-[40px] bg-white border border-slate-300 rounded-lg px-3 text-sm font-mono text-slate-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+                      className={`w-full h-[40px] bg-white border rounded-lg px-3 text-sm font-mono text-slate-900 focus:outline-none shadow-xs ${
+                        formErrors.max_days
+                          ? 'border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
+                          : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'
+                      }`}
                     />
+                    {formErrors.max_days && (
+                      <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {formErrors.max_days}
+                      </p>
+                    )}
                   </div>
                 </div>
 

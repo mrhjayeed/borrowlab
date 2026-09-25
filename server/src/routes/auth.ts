@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, JWT_SECRET, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
@@ -124,15 +125,7 @@ router.post('/switch-persona', async (req, res) => {
 router.post('/register', async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    const firstErrorMessage = parsed.error.issues[0]?.message || 'Validation failed';
-    res.status(400).json({
-      error: firstErrorMessage,
-      details: parsed.error.format(),
-      issues: parsed.error.issues.map((i) => ({
-        field: i.path.join('.'),
-        message: i.message,
-      })),
-    });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -236,8 +229,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    const firstErrorMessage = parsed.error.issues[0]?.message || 'Invalid email or password format';
-    res.status(400).json({ error: firstErrorMessage, details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

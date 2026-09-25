@@ -3,20 +3,21 @@ import { z } from 'zod';
 import { query } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const reservationSchema = z.object({
-  listing_id: z.coerce.number().int().positive(),
-  start_date: z.string(),
-  end_date: z.string(),
+  listing_id: z.coerce.number().int().positive('Please select a valid marketplace listing'),
+  start_date: z.string().min(1, 'Start date is required'),
+  end_date: z.string().min(1, 'End date is required'),
 });
 
 // POST /api/reservations
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = reservationSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

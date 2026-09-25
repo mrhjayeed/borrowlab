@@ -4,6 +4,7 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
@@ -330,7 +331,7 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -413,7 +414,7 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
 router.post('/request', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = requestRentalSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -1017,7 +1018,7 @@ router.post('/:id/request-return', authenticateToken, async (req: AuthenticatedR
 router.post('/:id/confirm-return', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = returnConfirmationSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

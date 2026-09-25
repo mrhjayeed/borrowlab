@@ -4,17 +4,18 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const createReviewSchema = z.object({
-  rental_id: z.coerce.number().int().positive(),
-  rating: z.coerce.number().int().min(1).max(5),
+  rental_id: z.coerce.number().int().positive('Please select a valid rental'),
+  rating: z.coerce.number().int().min(1, 'Rating must be between 1 and 5 stars').max(5, 'Rating must be between 1 and 5 stars'),
   comment: z.string().trim().min(5, 'Review comment must be at least 5 characters'),
 });
 
 const updateReviewSchema = z.object({
-  rating: z.coerce.number().int().min(1).max(5),
+  rating: z.coerce.number().int().min(1, 'Rating must be between 1 and 5 stars').max(5, 'Rating must be between 1 and 5 stars'),
   comment: z.string().trim().min(5, 'Review comment must be at least 5 characters'),
 });
 
@@ -29,7 +30,7 @@ const calculateTrustDelta = (rating: number): number => {
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createReviewSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -141,7 +142,7 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
 
   const parsed = updateReviewSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

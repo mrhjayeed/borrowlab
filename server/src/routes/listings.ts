@@ -4,17 +4,18 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, optionalAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const createListingSchema = z.object({
-  inventory_id: z.number().int().positive(),
-  weekly_rent: z.number().positive(),
-  minimum_duration_days: z.number().int().positive().default(1),
-  maximum_duration_days: z.number().int().positive().default(30),
-  listing_title: z.string().min(5).max(200),
+  inventory_id: z.number({ invalid_type_error: 'Please select a valid inventory unit' }).int().positive('Please select a valid inventory unit'),
+  weekly_rent: z.number({ invalid_type_error: 'Weekly rent must be a valid number' }).positive('Weekly rent must be greater than 0 BDT'),
+  minimum_duration_days: z.number({ invalid_type_error: 'Minimum rental days must be an integer' }).int().positive('Minimum rental days must be at least 1 day').default(1),
+  maximum_duration_days: z.number({ invalid_type_error: 'Maximum rental days must be an integer' }).int().positive('Maximum rental days must be at least 1 day').default(30),
+  listing_title: z.string({ invalid_type_error: 'Listing title must be text' }).min(5, 'Listing title must be at least 5 characters').max(200, 'Listing title cannot exceed 200 characters'),
   description: z.string().optional(),
-  pickup_information: z.string().max(500).optional(),
+  pickup_information: z.string().max(500, 'Pickup information cannot exceed 500 characters').optional(),
   image_urls: z.array(z.string().min(1)).optional(),
 });
 
@@ -175,7 +176,7 @@ router.get('/:id', optionalAuth, async (req: AuthenticatedRequest, res: Response
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createListingSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -280,7 +281,7 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

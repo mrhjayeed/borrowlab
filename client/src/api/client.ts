@@ -1,12 +1,23 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
+export interface ApiIssue {
+  field?: string;
+  message: string;
+}
+
 export class ApiError extends Error {
   status: number;
   data: any;
+  reason?: string;
+  issues?: ApiIssue[];
+
   constructor(message: string, status: number, data?: any) {
     super(message);
+    this.name = 'ApiError';
     this.status = status;
     this.data = data;
+    this.reason = data?.reason;
+    this.issues = data?.issues;
   }
 }
 
@@ -44,8 +55,64 @@ async function request<T = any>(
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const errorMsg = data.error || (Array.isArray(data.issues) && data.issues[0]?.message) || 'An unexpected error occurred';
-    throw new ApiError(errorMsg, response.status, data);
+    // 1. Extract specific reason from data.reason, data.issues, or data.details
+    let reason = typeof data.reason === 'string' && data.reason.trim() ? data.reason.trim() : '';
+
+    const issues: ApiIssue[] = Array.isArray(data.issues) ? data.issues : [];
+
+    if (!reason && issues.length > 0) {
+      reason = issues
+        .map((i: any) => (i?.message ? String(i.message) : String(i)))
+        .filter(Boolean)
+        .join('; ');
+    }
+
+    // Fallback: If reason still not found, inspect details object (e.g. Zod format tree)
+    if (!reason && data.details && typeof data.details === 'object') {
+      const extracted: string[] = [];
+      const extractErrors = (obj: any, prefix = '') => {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj._errors) && obj._errors.length > 0) {
+          const field = prefix ? prefix.replace(/_/g, ' ') : '';
+          extracted.push(field ? `${field}: ${obj._errors.join(', ')}` : obj._errors.join(', '));
+        }
+        for (const key of Object.keys(obj)) {
+          if (key !== '_errors') {
+            extractErrors(obj[key], prefix ? `${prefix}.${key}` : key);
+          }
+        }
+      };
+      extractErrors(data.details);
+      if (extracted.length > 0) {
+        reason = extracted.join('; ');
+      }
+    }
+
+    // 2. Build descriptive error message
+    let rawError = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : '';
+
+    let errorMsg = '';
+    if (rawError && reason) {
+      if (rawError.toLowerCase().includes(reason.toLowerCase())) {
+        errorMsg = rawError;
+      } else if (rawError.toLowerCase() === 'validation failed') {
+        errorMsg = `Validation failed: ${reason}`;
+      } else {
+        errorMsg = `${rawError}: ${reason}`;
+      }
+    } else if (rawError) {
+      errorMsg = rawError;
+    } else if (reason) {
+      errorMsg = `Validation failed: ${reason}`;
+    } else {
+      errorMsg = 'An unexpected error occurred';
+    }
+
+    throw new ApiError(errorMsg, response.status, {
+      ...data,
+      reason: reason || undefined,
+      issues: issues.length ? issues : undefined,
+    });
   }
 
   return data as T;

@@ -4,6 +4,7 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
@@ -111,7 +112,7 @@ router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), asy
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createDamageReportSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -176,7 +177,7 @@ router.put('/:id/review', authenticateToken, requireRole(['ADMIN', 'MODERATOR'])
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

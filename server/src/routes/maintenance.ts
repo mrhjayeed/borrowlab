@@ -3,14 +3,15 @@ import { z } from 'zod';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const createMaintenanceSchema = z.object({
-  inventory_id: z.number().int().positive(),
-  maintenance_type: z.string().min(2).max(100),
+  inventory_id: z.number().int().positive('Please select a valid inventory unit'),
+  maintenance_type: z.string().trim().min(2, 'Maintenance type must be at least 2 characters').max(100),
   description: z.string().optional(),
-  cost: z.number().nonnegative().default(0),
+  cost: z.number().nonnegative('Cost cannot be negative').default(0),
   notes: z.string().optional(),
 });
 
@@ -18,7 +19,7 @@ const createMaintenanceSchema = z.object({
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createMaintenanceSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

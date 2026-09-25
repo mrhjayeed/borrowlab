@@ -4,34 +4,40 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
 const accessorySchema = z.object({
-  accessory_name: z.string().min(1).max(150),
-  quantity: z.number().int().positive().default(1),
-  replacement_value: z.number().nonnegative().default(0),
+  accessory_name: z.string({ invalid_type_error: 'Accessory name must be text' }).min(1, 'Accessory name is required').max(150, 'Accessory name cannot exceed 150 characters'),
+  quantity: z.number({ invalid_type_error: 'Accessory quantity must be a valid number' }).int('Accessory quantity must be a whole number').positive('Accessory quantity must be at least 1').default(1),
+  replacement_value: z.number({ invalid_type_error: 'Accessory replacement value must be a valid number' }).nonnegative('Accessory replacement value cannot be negative').default(0),
   is_required: z.boolean().default(false),
 });
 
 const createInventorySchema = z.object({
-  component_id: z.number().int().positive(),
-  inventory_code: z.string().max(50).optional(),
-  serial_number: z.string().max(100).optional(),
-  condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED']),
-  replacement_value: z.number().positive(),
+  component_id: z.number({ invalid_type_error: 'Please select a hardware model from catalog' }).int().positive('Please select a valid hardware model'),
+  inventory_code: z.string({ invalid_type_error: 'Asset tag ID must be text' }).max(50, 'Asset tag ID cannot exceed 50 characters').optional(),
+  serial_number: z.string({ invalid_type_error: 'Serial number must be text' }).max(100, 'Serial number cannot exceed 100 characters').optional(),
+  condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'], {
+    errorMap: () => ({ message: 'Condition must be EXCELLENT, GOOD, FAIR, POOR, or DAMAGED' }),
+  }),
+  replacement_value: z.number({ invalid_type_error: 'Replacement value must be a valid number' }).positive('Replacement value must be greater than 0 BDT'),
   purchase_date: z.string().optional(),
   description: z.string().optional(),
-  current_location: z.string().max(255).optional(),
+  current_location: z.string().max(255, 'Location cannot exceed 255 characters').optional(),
   image_url: z.string().optional().nullable(),
   accessories: z.array(accessorySchema).optional(),
   listing: z.object({
-    weekly_rent: z.number().positive(),
-    minimum_duration_days: z.number().int().positive().default(1),
-    maximum_duration_days: z.number().int().positive().default(30),
-    listing_title: z.string().min(5).max(200).optional(),
+    weekly_rent: z.number({ invalid_type_error: 'Weekly rent must be a valid number' }).positive('Weekly rent must be greater than 0 BDT'),
+    minimum_duration_days: z.number({ invalid_type_error: 'Minimum rental days must be a whole number' }).int().positive('Minimum rental days must be at least 1 day').default(1),
+    maximum_duration_days: z.number({ invalid_type_error: 'Maximum rental days must be a whole number' }).int().positive('Maximum rental days must be at least 1 day').default(30),
+    listing_title: z.string().min(5, 'Listing title must be at least 5 characters').max(200, 'Listing title cannot exceed 200 characters').optional(),
     description: z.string().optional(),
-    pickup_information: z.string().max(500).optional(),
+    pickup_information: z.string().max(500, 'Pickup information cannot exceed 500 characters').optional(),
+  }).refine((data) => data.maximum_duration_days >= data.minimum_duration_days, {
+    message: 'Maximum rental duration must be greater than or equal to minimum rental duration',
+    path: ['maximum_duration_days'],
   }).optional(),
 });
 
@@ -148,7 +154,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createInventorySchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -278,17 +284,21 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 // PUT /api/inventory/:id
 router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const schema = z.object({
-    condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED']).optional(),
-    current_location: z.string().max(255).optional(),
+    condition: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'], {
+      errorMap: () => ({ message: 'Condition must be EXCELLENT, GOOD, FAIR, POOR, or DAMAGED' }),
+    }).optional(),
+    current_location: z.string().max(255, 'Location cannot exceed 255 characters').optional(),
     description: z.string().optional(),
-    replacement_value: z.number().positive().optional(),
-    status: z.enum(['AVAILABLE', 'MAINTENANCE', 'RETIRED']).optional(),
+    replacement_value: z.number({ invalid_type_error: 'Replacement value must be a valid number' }).positive('Replacement value must be greater than 0 BDT').optional(),
+    status: z.enum(['AVAILABLE', 'MAINTENANCE', 'RETIRED'], {
+      errorMap: () => ({ message: 'Status must be AVAILABLE, MAINTENANCE, or RETIRED' }),
+    }).optional(),
     image_url: z.string().optional().nullable(),
   });
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 

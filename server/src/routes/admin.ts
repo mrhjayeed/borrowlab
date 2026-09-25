@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
@@ -294,12 +295,14 @@ router.get('/users', async (req, res) => {
 // PUT /api/admin/users/:id/status
 router.put('/users/:id/status', async (req: AuthenticatedRequest, res: Response) => {
   const schema = z.object({
-    status: z.enum(['ACTIVE', 'SUSPENDED', 'BANNED', 'DEACTIVATED']),
+    status: z.enum(['ACTIVE', 'SUSPENDED', 'BANNED', 'DEACTIVATED'], {
+      errorMap: () => ({ message: 'Status must be ACTIVE, SUSPENDED, BANNED, or DEACTIVATED' }),
+    }),
   });
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid status' });
+    sendValidationError(res, parsed.error);
     return;
   }
 

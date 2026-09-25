@@ -4,6 +4,7 @@ import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, requireRole, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { realtime } from '../services/realtime.js';
+import { sendValidationError } from '../utils/validation.js';
 
 const router = Router();
 
@@ -217,7 +218,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const parsed = createDisputeSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -318,13 +319,13 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
 // POST /api/disputes/:id/messages
 router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const schema = z.object({
-    message: z.string().min(1),
+    message: z.string().trim().min(1, 'Dispute message cannot be empty'),
     file_url: z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Message cannot be empty' });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -401,7 +402,7 @@ router.post('/:id/messages', authenticateToken, async (req: AuthenticatedRequest
 router.post('/:id/resolve', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), async (req: AuthenticatedRequest, res: Response) => {
   const parsed = resolveDisputeSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    sendValidationError(res, parsed.error);
     return;
   }
 
