@@ -27,9 +27,10 @@ const createDamageReportSchema = z.object({
 
 // GET /api/damage/queue
 // Moderator/Admin queue
-router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), async (_req, res) => {
+router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const result = await query(`
+    const { status, damage_type, search, sort } = req.query;
+    let sql = `
       SELECT 
         d.*,
         r.listing_id,
@@ -57,10 +58,49 @@ router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), asy
       JOIN users u_owner ON r.owner_id = u_owner.user_id
       JOIN users u_borrower ON r.borrower_id = u_borrower.user_id
       LEFT JOIN damage_evidence de ON d.damage_report_id = de.damage_report_id
-      GROUP BY d.damage_report_id, r.listing_id, l.listing_title, i.inventory_code, c.component_name, u_rep.full_name, u_owner.full_name, u_borrower.full_name
-      ORDER BY d.reported_at DESC
-    `);
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
+    if (status) {
+      if (status === 'PENDING') {
+        sql += ` AND d.status IN ('REPORTED', 'UNDER_REVIEW')`;
+      } else {
+        params.push(status);
+        sql += ` AND d.status = $${params.length}`;
+      }
+    }
+
+    if (damage_type) {
+      params.push(damage_type);
+      sql += ` AND d.damage_type = $${params.length}`;
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      sql += ` AND (
+        c.component_name ILIKE $${params.length}
+        OR l.listing_title ILIKE $${params.length}
+        OR i.inventory_code ILIKE $${params.length}
+        OR u_rep.full_name ILIKE $${params.length}
+        OR u_owner.full_name ILIKE $${params.length}
+        OR u_borrower.full_name ILIKE $${params.length}
+        OR d.description ILIKE $${params.length}
+        OR CAST(d.damage_report_id AS TEXT) ILIKE $${params.length}
+      )`;
+    }
+
+    sql += ` GROUP BY d.damage_report_id, r.listing_id, l.listing_title, i.inventory_code, c.component_name, u_rep.full_name, u_owner.full_name, u_borrower.full_name`;
+
+    if (sort === 'highest_cost') {
+      sql += ` ORDER BY d.estimated_cost DESC, d.reported_at DESC`;
+    } else if (sort === 'lowest_cost') {
+      sql += ` ORDER BY d.estimated_cost ASC, d.reported_at DESC`;
+    } else {
+      sql += ` ORDER BY d.reported_at DESC`;
+    }
+
+    const result = await query(sql, params);
     res.json({ reports: result.rows });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

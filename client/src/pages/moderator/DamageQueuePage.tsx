@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { useRealtimeEvent } from '../../context/RealtimeContext';
@@ -16,6 +16,11 @@ import {
   ExternalLink,
   ZoomIn,
   Camera,
+  Search,
+  SlidersHorizontal,
+  RotateCcw,
+  Filter,
+  X,
 } from 'lucide-react';
 
 export const DamageQueuePage: React.FC = () => {
@@ -26,6 +31,13 @@ export const DamageQueuePage: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+
+  // Filter and Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'REPORTED' | 'UNDER_REVIEW' | 'ACCEPTED' | 'SETTLED' | 'REJECTED'>('ALL');
+  const [damageTypeFilter, setDamageTypeFilter] = useState<string>('ALL');
+  const [evidenceFilter, setEvidenceFilter] = useState<'ALL' | 'WITH_EVIDENCE' | 'NO_EVIDENCE'>('ALL');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'highest_cost' | 'lowest_cost' | 'highest_approved'>('newest');
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -66,6 +78,115 @@ export const DamageQueuePage: React.FC = () => {
     }
   };
 
+  const kpis = useMemo(() => {
+    const total = reports.length;
+    const pending = reports.filter((r) => ['REPORTED', 'UNDER_REVIEW'].includes(r.status)).length;
+    const reported = reports.filter((r) => r.status === 'REPORTED').length;
+    const underReview = reports.filter((r) => r.status === 'UNDER_REVIEW').length;
+    const accepted = reports.filter((r) => r.status === 'ACCEPTED').length;
+    const settled = reports.filter((r) => r.status === 'SETTLED').length;
+    const rejected = reports.filter((r) => r.status === 'REJECTED').length;
+    const withEvidence = reports.filter((r) => r.evidence && r.evidence.length > 0).length;
+    const totalEstimatedCost = reports.reduce(
+      (sum, r) => sum + (parseFloat(String(r.estimated_cost || '0')) || 0),
+      0
+    );
+    const totalApprovedCost = reports.reduce(
+      (sum, r) => sum + (parseFloat(String(r.approved_cost || '0')) || 0),
+      0
+    );
+
+    return {
+      total,
+      pending,
+      reported,
+      underReview,
+      accepted,
+      settled,
+      rejected,
+      withEvidence,
+      totalEstimatedCost,
+      totalApprovedCost,
+    };
+  }, [reports]);
+
+  const filteredReports = useMemo(() => {
+    let result = [...reports];
+
+    // Status filter
+    if (statusFilter === 'PENDING') {
+      result = result.filter((r) => ['REPORTED', 'UNDER_REVIEW'].includes(r.status));
+    } else if (statusFilter !== 'ALL') {
+      result = result.filter((r) => r.status === statusFilter);
+    }
+
+    // Damage type filter
+    if (damageTypeFilter !== 'ALL') {
+      result = result.filter((r) => r.damage_type === damageTypeFilter);
+    }
+
+    // Evidence filter
+    if (evidenceFilter === 'WITH_EVIDENCE') {
+      result = result.filter((r) => r.evidence && r.evidence.length > 0);
+    } else if (evidenceFilter === 'NO_EVIDENCE') {
+      result = result.filter((r) => !r.evidence || r.evidence.length === 0);
+    }
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((r) => {
+        const idMatch = String(r.damage_report_id).includes(q) || `#${r.damage_report_id}`.includes(q);
+        const codeMatch = r.inventory_code?.toLowerCase().includes(q);
+        const titleMatch = r.listing_title?.toLowerCase().includes(q);
+        const compMatch = r.component_name?.toLowerCase().includes(q);
+        const reporterMatch = r.reported_by_name?.toLowerCase().includes(q);
+        const ownerMatch = r.owner_name?.toLowerCase().includes(q);
+        const borrowerMatch = r.borrower_name?.toLowerCase().includes(q);
+        const typeMatch = r.damage_type?.toLowerCase().replace('_', ' ').includes(q);
+        const descMatch = r.description?.toLowerCase().includes(q);
+        return idMatch || codeMatch || titleMatch || compMatch || reporterMatch || ownerMatch || borrowerMatch || typeMatch || descMatch;
+      });
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return new Date(b.reported_at).getTime() - new Date(a.reported_at).getTime();
+      }
+      if (sortBy === 'oldest') {
+        return new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime();
+      }
+      if (sortBy === 'highest_cost') {
+        return (parseFloat(String(b.estimated_cost || '0')) || 0) - (parseFloat(String(a.estimated_cost || '0')) || 0);
+      }
+      if (sortBy === 'lowest_cost') {
+        return (parseFloat(String(a.estimated_cost || '0')) || 0) - (parseFloat(String(b.estimated_cost || '0')) || 0);
+      }
+      if (sortBy === 'highest_approved') {
+        return (parseFloat(String(b.approved_cost || '0')) || 0) - (parseFloat(String(a.approved_cost || '0')) || 0);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [reports, statusFilter, damageTypeFilter, evidenceFilter, searchQuery, sortBy]);
+
+  const hasActiveFilters =
+    searchQuery.trim() !== '' ||
+    statusFilter !== 'ALL' ||
+    damageTypeFilter !== 'ALL' ||
+    evidenceFilter !== 'ALL' ||
+    sortBy !== 'newest';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    setDamageTypeFilter('ALL');
+    setEvidenceFilter('ALL');
+    setSortBy('newest');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -83,6 +204,170 @@ export const DamageQueuePage: React.FC = () => {
         </div>
       </div>
 
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <Card className="p-3.5 bg-white border-slate-200">
+          <div className="text-[11px] font-medium text-slate-500">Total Claims</div>
+          <div className="text-xl font-bold text-slate-900 mt-1 font-mono">{kpis.total}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Reported incidents</div>
+        </Card>
+        <Card className="p-3.5 bg-amber-50/50 border-amber-200">
+          <div className="text-[11px] font-medium text-amber-800">Pending Review</div>
+          <div className="text-xl font-bold text-amber-900 mt-1 font-mono">{kpis.pending}</div>
+          <div className="text-[10px] text-amber-700/80 mt-0.5">{kpis.reported} new • {kpis.underReview} reviewing</div>
+        </Card>
+        <Card className="p-3.5 bg-indigo-50/50 border-indigo-200">
+          <div className="text-[11px] font-medium text-indigo-800">With Photos</div>
+          <div className="text-xl font-bold text-[#4F46E5] mt-1 font-mono">{kpis.withEvidence}</div>
+          <div className="text-[10px] text-indigo-600 mt-0.5">Uploaded proof</div>
+        </Card>
+        <Card className="p-3.5 bg-emerald-50/50 border-emerald-200">
+          <div className="text-[11px] font-medium text-emerald-800">Accepted Claims</div>
+          <div className="text-xl font-bold text-emerald-900 mt-1 font-mono">{kpis.accepted + kpis.settled}</div>
+          <div className="text-[10px] text-emerald-600 mt-0.5">{kpis.settled} already settled</div>
+        </Card>
+        <Card className="p-3.5 bg-rose-50/50 border-rose-200 col-span-2 sm:col-span-1">
+          <div className="text-[11px] font-medium text-rose-800">Claimed Value</div>
+          <div className="text-lg font-bold text-rose-900 mt-1 font-mono">
+            {kpis.totalEstimatedCost.toLocaleString()} <span className="text-xs">BDT</span>
+          </div>
+          <div className="text-[10px] text-rose-600/80 mt-0.5">Total estimated loss</div>
+        </Card>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <Card className="p-3.5 space-y-3 bg-white border-slate-200 shadow-level-1">
+        {/* Row 1: Search & Status Pills */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search Report #, inventory code, user names, description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#4F46E5] focus:border-[#4F46E5] transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Status Segmented Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs">
+            {[
+              { id: 'ALL', label: 'All Reports', count: kpis.total },
+              { id: 'PENDING', label: 'Pending Review', count: kpis.pending },
+              { id: 'REPORTED', label: 'Reported', count: kpis.reported },
+              { id: 'UNDER_REVIEW', label: 'Reviewing', count: kpis.underReview },
+              { id: 'ACCEPTED', label: 'Accepted', count: kpis.accepted },
+              { id: 'SETTLED', label: 'Settled', count: kpis.settled },
+              { id: 'REJECTED', label: 'Rejected', count: kpis.rejected },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id as any)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                  statusFilter === tab.id
+                    ? 'bg-[#4F46E5] text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    statusFilter === tab.id
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2: Secondary Dropdowns (Damage Type, Evidence, Sort) & Reset */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <span>Filter:</span>
+            </div>
+
+            {/* Damage Type Dropdown */}
+            <select
+              value={damageTypeFilter}
+              onChange={(e) => setDamageTypeFilter(e.target.value)}
+              className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#4F46E5]"
+            >
+              <option value="ALL">All Damage Classifications</option>
+              <option value="MINOR_DAMAGE">Minor Degradation</option>
+              <option value="MAJOR_DAMAGE">Major Damage</option>
+              <option value="MISSING_ACCESSORY">Missing Accessory</option>
+              <option value="LOST">Lost Equipment</option>
+              <option value="NON_FUNCTIONAL">Non Functional</option>
+              <option value="BURNED">Burned / Electrical Defect</option>
+              <option value="PHYSICAL_DAMAGE">Cracked / Physical Damage</option>
+              <option value="OTHER">Other Discrepancy</option>
+            </select>
+
+            {/* Evidence Filter */}
+            <select
+              value={evidenceFilter}
+              onChange={(e) => setEvidenceFilter(e.target.value as any)}
+              className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#4F46E5]"
+            >
+              <option value="ALL">All Evidence Statuses</option>
+              <option value="WITH_EVIDENCE">Has Photographic Evidence</option>
+              <option value="NO_EVIDENCE">No Photos Uploaded</option>
+            </select>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-1 ml-1">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#4F46E5]"
+              >
+                <option value="newest">Sort: Newest First</option>
+                <option value="oldest">Sort: Oldest First</option>
+                <option value="highest_cost">Sort: Estimated Cost (High to Low)</option>
+                <option value="lowest_cost">Sort: Estimated Cost (Low to High)</option>
+                <option value="highest_approved">Sort: Approved Cost (High to Low)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Counts & Reset */}
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-slate-500 font-mono">
+              Showing <strong className="text-slate-800">{filteredReports.length}</strong> of{' '}
+              <strong className="text-slate-800">{reports.length}</strong>
+            </span>
+
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset Filters
+              </button>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2].map((i) => (
@@ -97,9 +382,21 @@ export const DamageQueuePage: React.FC = () => {
             All returned hardware units have either passed inspection or been settled.
           </p>
         </Card>
+      ) : filteredReports.length === 0 ? (
+        <Card className="p-10 text-center text-xs text-slate-500 space-y-3 bg-white border-slate-200 shadow-level-1">
+          <Search className="w-8 h-8 text-slate-300 mx-auto" />
+          <h3 className="text-base font-semibold text-slate-800">No damage reports match filters</h3>
+          <p className="max-w-xs mx-auto text-slate-400">
+            No incident reports meet your search keyword or selected filter parameters.
+          </p>
+          <Button variant="secondary" size="sm" onClick={resetFilters} className="gap-1.5 mx-auto">
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset All Filters
+          </Button>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {reports.map((rep) => (
+          {filteredReports.map((rep) => (
             <Card key={rep.damage_report_id} className="p-5 space-y-4 hover:border-slate-300 transition-colors">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">

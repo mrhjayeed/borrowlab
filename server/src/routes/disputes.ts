@@ -32,9 +32,10 @@ const resolveDisputeSchema = z.object({
 });
 
 // GET /api/disputes/queue (Moderator/Admin)
-router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), async (_req, res) => {
+router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const result = await query(`
+    const { status, reason, search, sort } = req.query;
+    let sql = `
       SELECT 
         d.*,
         r.listing_id,
@@ -54,9 +55,50 @@ router.get('/queue', authenticateToken, requireRole(['ADMIN', 'MODERATOR']), asy
       JOIN users u_open ON d.opened_by = u_open.user_id
       JOIN users u_against ON d.against_user_id = u_against.user_id
       LEFT JOIN escrows e ON r.rental_id = e.rental_id
-      ORDER BY d.opened_at DESC
-    `);
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
+    if (status) {
+      if (status === 'NEEDS_ACTION') {
+        sql += ` AND d.status IN ('OPEN', 'UNDER_REVIEW', 'EVIDENCE_REQUESTED')`;
+      } else if (status === 'RESOLVED') {
+        sql += ` AND d.status IN ('RESOLVED_OWNER', 'RESOLVED_BORROWER', 'PARTIAL_SETTLEMENT')`;
+      } else if (status === 'CLOSED_REJECTED') {
+        sql += ` AND d.status IN ('CLOSED', 'REJECTED')`;
+      } else {
+        params.push(status);
+        sql += ` AND d.status = $${params.length}`;
+      }
+    }
+
+    if (reason) {
+      params.push(reason);
+      sql += ` AND d.reason = $${params.length}`;
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      sql += ` AND (
+        c.component_name ILIKE $${params.length}
+        OR l.listing_title ILIKE $${params.length}
+        OR i.inventory_code ILIKE $${params.length}
+        OR u_open.full_name ILIKE $${params.length}
+        OR u_against.full_name ILIKE $${params.length}
+        OR d.description ILIKE $${params.length}
+        OR CAST(d.dispute_id AS TEXT) ILIKE $${params.length}
+      )`;
+    }
+
+    if (sort === 'oldest') {
+      sql += ` ORDER BY d.opened_at ASC`;
+    } else if (sort === 'highest_claim') {
+      sql += ` ORDER BY d.requested_amount DESC, d.opened_at DESC`;
+    } else {
+      sql += ` ORDER BY d.opened_at DESC`;
+    }
+
+    const result = await query(sql, params);
     res.json({ disputes: result.rows });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

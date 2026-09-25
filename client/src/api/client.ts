@@ -206,7 +206,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  getDamageQueue: () => request<{ reports: any[] }>('/damage/queue'),
+  getDamageQueue: (params?: Record<string, any>) => {
+    const qs = params ? new URLSearchParams(Object.entries(params).filter(([_, v]) => v !== undefined && v !== '')).toString() : '';
+    return request<{ reports: any[] }>(`/damage/queue${qs ? `?${qs}` : ''}`);
+  },
   reviewDamageReport: (id: number | string, payload: { status: string; approved_cost?: number }) =>
     request<{ report: any }>(`/damage/${id}/review`, { method: 'PUT', body: JSON.stringify(payload) }),
 
@@ -215,8 +218,14 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  getMyDisputes: () => request<{ disputes: any[] }>('/disputes/my'),
-  getDisputeQueue: () => request<{ disputes: any[] }>('/disputes/queue'),
+  getMyDisputes: (params?: Record<string, any>) => {
+    const qs = params ? new URLSearchParams(Object.entries(params).filter(([_, v]) => v !== undefined && v !== '')).toString() : '';
+    return request<{ disputes: any[] }>(`/disputes/my${qs ? `?${qs}` : ''}`);
+  },
+  getDisputeQueue: (params?: Record<string, any>) => {
+    const qs = params ? new URLSearchParams(Object.entries(params).filter(([_, v]) => v !== undefined && v !== '')).toString() : '';
+    return request<{ disputes: any[] }>(`/disputes/queue${qs ? `?${qs}` : ''}`);
+  },
   getDisputeDetail: (id: number | string) => request<{ dispute: any }>(`/disputes/${id}`),
   postDisputeMessage: (id: number | string, message: string, file_url?: string) => request<{ message: any }>(`/disputes/${id}/messages`, {
     method: 'POST',

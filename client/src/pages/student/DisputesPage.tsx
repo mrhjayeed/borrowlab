@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -26,6 +26,10 @@ import {
   Paperclip,
   ZoomIn,
   ExternalLink,
+  Search,
+  SlidersHorizontal,
+  RotateCcw,
+  Filter,
 } from 'lucide-react';
 
 export const DisputesPage: React.FC = () => {
@@ -38,6 +42,13 @@ export const DisputesPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filters and Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED' | 'CLOSED'>('ALL');
+  const [reasonFilter, setReasonFilter] = useState<string>('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'OPENED_BY_ME' | 'AGAINST_ME'>('ALL');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'highest_claim' | 'lowest_claim'>('newest');
 
   // Evidence Lightbox modal
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
@@ -264,11 +275,109 @@ export const DisputesPage: React.FC = () => {
         || err.response?.data?.error
         || err.message
         || 'Failed to open dispute';
-      error(msg);
     } finally {
       setIsSubmittingDispute(false);
     }
   };
+
+  const counts = useMemo(() => {
+    return {
+      all: disputes.length,
+      active: disputes.filter((d) => ['OPEN', 'UNDER_REVIEW'].includes(d.status)).length,
+      resolved: disputes.filter((d) =>
+        ['RESOLVED_OWNER', 'RESOLVED_BORROWER', 'PARTIAL_SETTLEMENT'].includes(d.status)
+      ).length,
+      closed: disputes.filter((d) => ['CLOSED', 'REJECTED'].includes(d.status)).length,
+    };
+  }, [disputes]);
+
+  const filteredDisputes = useMemo(() => {
+    let result = [...disputes];
+
+    // Status filter
+    if (statusFilter === 'ACTIVE') {
+      result = result.filter((d) => ['OPEN', 'UNDER_REVIEW'].includes(d.status));
+    } else if (statusFilter === 'RESOLVED') {
+      result = result.filter((d) =>
+        ['RESOLVED_OWNER', 'RESOLVED_BORROWER', 'PARTIAL_SETTLEMENT'].includes(d.status)
+      );
+    } else if (statusFilter === 'CLOSED') {
+      result = result.filter((d) => ['CLOSED', 'REJECTED'].includes(d.status));
+    }
+
+    // Reason filter
+    if (reasonFilter !== 'ALL') {
+      result = result.filter((d) => d.reason === reasonFilter);
+    }
+
+    // Role filter
+    if (roleFilter === 'OPENED_BY_ME') {
+      result = result.filter((d) => Number(d.opened_by) === Number(user?.userId));
+    } else if (roleFilter === 'AGAINST_ME') {
+      result = result.filter((d) => Number(d.against_user_id) === Number(user?.userId) || Number(d.opened_by) !== Number(user?.userId));
+    }
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((d) => {
+        const idMatch = String(d.dispute_id).includes(q) || `#${d.dispute_id}`.includes(q);
+        const compMatch = d.component_name?.toLowerCase().includes(q);
+        const titleMatch = d.listing_title?.toLowerCase().includes(q);
+        const reasonMatch = d.reason?.toLowerCase().replace('_', ' ').includes(q);
+        const openedByMatch = d.opened_by_name?.toLowerCase().includes(q);
+        const againstMatch = d.against_user_name?.toLowerCase().includes(q);
+        const descMatch = d.description?.toLowerCase().includes(q);
+        return idMatch || compMatch || titleMatch || reasonMatch || openedByMatch || againstMatch || descMatch;
+      });
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime();
+      }
+      if (sortBy === 'oldest') {
+        return new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime();
+      }
+      if (sortBy === 'highest_claim') {
+        return (parseFloat(String(b.requested_amount)) || 0) - (parseFloat(String(a.requested_amount)) || 0);
+      }
+      if (sortBy === 'lowest_claim') {
+        return (parseFloat(String(a.requested_amount)) || 0) - (parseFloat(String(b.requested_amount)) || 0);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [disputes, statusFilter, reasonFilter, roleFilter, searchQuery, sortBy, user?.userId]);
+
+  const hasActiveFilters =
+    searchQuery.trim() !== '' ||
+    statusFilter !== 'ALL' ||
+    reasonFilter !== 'ALL' ||
+    roleFilter !== 'ALL' ||
+    sortBy !== 'newest';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    setReasonFilter('ALL');
+    setRoleFilter('ALL');
+    setSortBy('newest');
+  };
+
+  // Synchronize selection with filtered list
+  useEffect(() => {
+    if (filteredDisputes.length > 0) {
+      const isSelectedInFiltered = filteredDisputes.some((d) => d.dispute_id === selectedDispute?.dispute_id);
+      if (!isSelectedInFiltered) {
+        loadDisputeDetail(filteredDisputes[0].dispute_id);
+      }
+    } else {
+      setSelectedDispute(null);
+    }
+  }, [filteredDisputes]);
 
   return (
     <div className="space-y-6">
@@ -301,37 +410,192 @@ export const DisputesPage: React.FC = () => {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Dispute List (Left 1 col) */}
-          <div className="space-y-3">
-            <div className="label-caps text-slate-400 px-1">Active Cases ({disputes.length})</div>
-            {disputes.map((d) => (
-              <Card
-                key={d.dispute_id}
-                onClick={() => loadDisputeDetail(d.dispute_id)}
-                className={`p-4 cursor-pointer transition-all ${
-                  selectedDispute?.dispute_id === d.dispute_id
-                    ? 'border-[#4F46E5] ring-2 ring-indigo-50 shadow-level-2'
-                    : 'hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <span className="mono-data-sm text-[#4F46E5] font-semibold">Case #{d.dispute_id}</span>
-                  <StatusBadge status={d.status} size="sm" />
+        <div className="space-y-4">
+          {/* Filter & Search Toolbar */}
+          <Card className="p-3.5 space-y-3 bg-white border-slate-200 shadow-level-1">
+            {/* Row 1: Search & Status Pills */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Search Box */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search Case #, component, user, description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#4F46E5] focus:border-[#4F46E5] transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Segmented Buttons */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs">
+                {[
+                  { id: 'ALL', label: 'All', count: counts.all },
+                  { id: 'ACTIVE', label: 'Active', count: counts.active },
+                  { id: 'RESOLVED', label: 'Resolved', count: counts.resolved },
+                  { id: 'CLOSED', label: 'Closed', count: counts.closed },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setStatusFilter(tab.id as any)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      statusFilter === tab.id
+                        ? 'bg-[#4F46E5] text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                        statusFilter === tab.id
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Row 2: Secondary Dropdowns (Reason, Role, Sort) & Reset */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Filter by:</span>
                 </div>
-                <h3 className="text-sm font-semibold text-slate-900 mt-1 line-clamp-1">
-                  {d.reason.replace('_', ' ')} • {d.component_name}
-                </h3>
-                <div className="text-xs text-slate-500 mt-1 line-clamp-2">{d.description}</div>
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-100 mt-2">
-                  <span>Claim: {d.requested_amount} BDT</span>
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="w-3 h-3" /> {d.message_count || 0}
+
+                {/* Reason Dropdown */}
+                <select
+                  value={reasonFilter}
+                  onChange={(e) => setReasonFilter(e.target.value)}
+                  className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#4F46E5]"
+                >
+                  <option value="ALL">All Claim Reasons</option>
+                  <option value="DAMAGE">Physical Damage</option>
+                  <option value="LOST_ITEM">Lost Item</option>
+                  <option value="MISSING_ACCESSORY">Missing Accessory</option>
+                  <option value="PRE_EXISTING_DAMAGE">Pre-Existing Damage</option>
+                  <option value="DEFECTIVE_ITEM">Defective Hardware</option>
+                  <option value="INCORRECT_ITEM">Incorrect Item</option>
+                  <option value="LATE_RETURN">Late Return Penalty</option>
+                  <option value="PAYMENT_ISSUE">Payment / Escrow Issue</option>
+                  <option value="OTHER">Other Discrepancy</option>
+                </select>
+
+                {/* Role / Party Dropdown */}
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as any)}
+                  className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#4F46E5]"
+                >
+                  <option value="ALL">All Roles</option>
+                  <option value="OPENED_BY_ME">Filed by Me (Claimant)</option>
+                  <option value="AGAINST_ME">Filed Against Me (Respondent)</option>
+                </select>
+
+                {/* Sort Dropdown */}
+                <div className="flex items-center gap-1 ml-1">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#4F46E5]"
+                  >
+                    <option value="newest">Sort: Newest First</option>
+                    <option value="oldest">Sort: Oldest First</option>
+                    <option value="highest_claim">Sort: Claim (High to Low)</option>
+                    <option value="lowest_claim">Sort: Claim (Low to High)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Status / Reset Action */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-slate-500 font-mono">
+                  Showing <strong className="text-slate-800">{filteredDisputes.length}</strong> of{' '}
+                  <strong className="text-slate-800">{disputes.length}</strong>
+                </span>
+
+                {hasActiveFilters && (
+                  <button
+                    onClick={resetFilters}
+                    className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Dispute List (Left 1 col) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="label-caps text-slate-400">
+                  {statusFilter === 'ALL' ? 'All Disputes' : `${statusFilter.toLowerCase()} Cases`} ({filteredDisputes.length})
+                </span>
+                {hasActiveFilters && (
+                  <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-mono font-medium">
+                    Filtered
                   </span>
-                </div>
-              </Card>
-            ))}
-          </div>
+                )}
+              </div>
+
+              {filteredDisputes.length === 0 ? (
+                <Card className="p-8 text-center text-xs text-slate-500 space-y-3 bg-white">
+                  <Search className="w-8 h-8 text-slate-300 mx-auto" />
+                  <div className="font-semibold text-slate-800 text-sm">No matching disputes found</div>
+                  <p className="text-slate-400 text-xs max-w-xs mx-auto">
+                    No disputes match your current filter parameters or search keyword.
+                  </p>
+                  <Button variant="secondary" size="sm" onClick={resetFilters} className="gap-1.5 mx-auto">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reset All Filters
+                  </Button>
+                </Card>
+              ) : (
+                filteredDisputes.map((d) => (
+                  <Card
+                    key={d.dispute_id}
+                    onClick={() => loadDisputeDetail(d.dispute_id)}
+                    className={`p-4 cursor-pointer transition-all ${
+                      selectedDispute?.dispute_id === d.dispute_id
+                        ? 'border-[#4F46E5] ring-2 ring-indigo-50 shadow-level-2'
+                        : 'hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="mono-data-sm text-[#4F46E5] font-semibold">Case #{d.dispute_id}</span>
+                      <StatusBadge status={d.status} size="sm" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-slate-900 mt-1 line-clamp-1">
+                      {d.reason.replace('_', ' ')} • {d.component_name}
+                    </h3>
+                    <div className="text-xs text-slate-500 mt-1 line-clamp-2">{d.description}</div>
+                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-100 mt-2">
+                      <span>Claim: {d.requested_amount} BDT</span>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> {d.message_count || 0}
+                      </span>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
 
           {/* Dispute Detail & Thread (Right 2 cols) */}
           <div className="lg:col-span-2">
@@ -508,7 +772,8 @@ export const DisputesPage: React.FC = () => {
             )}
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* File Dispute Modal */}
       <Modal
