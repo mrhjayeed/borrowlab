@@ -359,7 +359,6 @@ export const api = {
   getHighTrustStudents: () => request<{ queryDescription: string; students: any[] }>('/admin/analytics/high-trust-students'),
   getPristineHardware: () => request<{ queryDescription: string; pristineComponents: any[] }>('/admin/analytics/pristine-hardware'),
   getUnbookedListings: () => request<{ queryDescription: string; unbookedListings: any[] }>('/admin/analytics/unbooked-listings'),
-  getExplainIndex: () => request<any>('/admin/analytics/explain-index'),
   getAdminUsers: (params?: { status?: string; search?: string }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);

@@ -39,8 +39,6 @@ import { AnalyticsPage } from './pages/admin/AnalyticsPage';
 import { UserDirectoryPage } from './pages/admin/UserDirectoryPage';
 import { AuditTrailPage } from './pages/admin/AuditTrailPage';
 
-// Internal Evaluation Route (Unlinked)
-import { SqlProofPage } from './pages/internal/SqlProofPage';
 
 const queryClient = new QueryClient();
 
@@ -223,15 +221,6 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Internal Unlinked SQL Diagnostic Verification Route */}
-                <Route
-                  path="/internal/sql-proof"
-                  element={
-                    <ProtectedRoute requiredRoles={['ADMIN']}>
-                      <SqlProofPage />
-                    </ProtectedRoute>
-                  }
-                />
               </Route>
 
               {/* Fallback */}

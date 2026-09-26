@@ -127,5 +127,4 @@ Log in using the seeded university accounts below:
 ## Technical & DBMS Documentation
 
 Detailed documentation of the 3NF relational design, SQL aggregations, correlated/nested subqueries, multi-table joins, view definitions, index scan proofs (`EXPLAIN ANALYZE`), and concurrency controls are recorded in:
-- [docs/sql-coverage.md](file:///home/haque/space/uni-project/dbms/borrowlab/docs/sql-coverage.md)
-- Internal execution plan diagnostic route: `http://localhost:5173/internal/sql-proof` (available in non-production builds)
+- [docs/sql-coverage.md](docs/sql-coverage.md)
