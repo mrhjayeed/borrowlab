@@ -246,7 +246,7 @@ export const HardwareDetailPage: React.FC = () => {
               {listing.specifications && (
                 <div>
                   <div className="label-caps mb-2 text-slate-500">Technical Specifications</div>
-                  <div className="p-3.5 bg-slate-50 rounded-[6px] border border-slate-200 text-xs font-mono text-slate-800 leading-relaxed whitespace-pre-wrap">
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-800 leading-relaxed whitespace-pre-wrap">
                     {listing.specifications}
                   </div>
                 </div>
@@ -256,7 +256,7 @@ export const HardwareDetailPage: React.FC = () => {
               <div>
                 <div className="label-caps mb-2 text-slate-500">Included Accessories Checklist</div>
                 {listing.accessories && listing.accessories.length > 0 ? (
-                  <div className="border border-slate-200 rounded-[6px] divide-y divide-slate-100 overflow-hidden text-xs">
+                  <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden text-xs">
                     {listing.accessories.map((acc, idx) => (
                       <div key={idx} className="p-3 flex items-center justify-between bg-white hover:bg-slate-50">
                         <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export const HardwareDetailPage: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500">
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
                     Standard basic unit only; no extra accessories declared.
                   </div>
                 )}
@@ -286,7 +286,7 @@ export const HardwareDetailPage: React.FC = () => {
 
               {/* Pickup Information */}
               {listing.pickup_information && (
-                <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-[6px] flex items-start gap-2.5">
+                <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl flex items-start gap-2.5">
                   <MapPin className="w-4 h-4 text-[#4F46E5] shrink-0 mt-0.5" />
                   <div className="text-xs">
                     <span className="font-semibold text-slate-900 block mb-0.5">Campus Handover Location</span>
@@ -351,18 +351,18 @@ export const HardwareDetailPage: React.FC = () => {
             </div>
 
             {/* Escrow Deposit Buffer Callout */}
-            <div className="p-3 bg-[#ECFEFF] border border-[#A5F3FC] rounded-[6px] space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#0E7490]">
-                <Lock className="w-3.5 h-3.5 text-[#06B6D4]" />
+            <div className="p-3 bg-cyan-50/70 border border-cyan-200/80 rounded-xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-cyan-800">
+                <Lock className="w-3.5 h-3.5 text-cyan-600" />
                 Escrow Security Deposit
               </div>
-              <div className="text-[11px] text-[#0E7490] leading-snug">
+              <div className="text-[11px] text-cyan-800 leading-snug">
                 Requires <span className="font-bold font-mono">{calculatedDeposit} BDT</span> locked in virtual escrow. Refunded immediately upon safe, inspected return.
               </div>
             </div>
 
             {/* Duration Limits */}
-            <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded bg-slate-50 border border-slate-100 font-mono">
+            <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-100 font-mono">
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-sans">Min Duration</span>
                 <span className="font-semibold text-slate-800">{listing.minimum_duration_days} days</span>

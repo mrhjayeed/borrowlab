@@ -106,42 +106,36 @@ export const HardwareImage: React.FC<HardwareImageProps> = ({
         </>
       )}
 
-      {/* Engineering Precision Placeholder */}
+      {/* Clean Modern Hardware Placeholder */}
       {showPlaceholder && (
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-50"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle, #CBD5E1 1px, transparent 1px)',
-            backgroundSize: '16px 16px',
-          }}
-        >
-          {/* Subtle Technical CAD Corner Marks */}
-          <div className="absolute top-2 left-2 w-2 h-2 border-t-2 border-l-2 border-slate-300" />
-          <div className="absolute top-2 right-2 w-2 h-2 border-t-2 border-r-2 border-slate-300" />
-          <div className="absolute bottom-2 left-2 w-2 h-2 border-b-2 border-l-2 border-slate-300" />
-          <div className="absolute bottom-2 right-2 w-2 h-2 border-b-2 border-r-2 border-slate-300" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-gradient-to-b from-slate-50/80 via-slate-100/60 to-slate-100">
+          {/* Subtle Ambient Pattern */}
+          <div
+            className="absolute inset-0 opacity-[0.4] pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(circle, #94A3B8 0.75px, transparent 0.75px)',
+              backgroundSize: '20px 20px',
+            }}
+          />
 
           {/* Centered Engineering Hardware Symbol */}
-          <div className="w-12 h-12 rounded-xl bg-white/95 border border-slate-200 shadow-sm flex items-center justify-center mb-2">
+          <div className="relative w-12 h-12 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex items-center justify-center mb-2.5 transition-transform duration-200 group-hover:scale-105">
             {getCategoryIcon()}
           </div>
 
-          {/* Asset Monospace Tag or Placeholder Notice */}
-          <div className="space-y-0.5">
-            <div className="font-mono text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-              Physical Unit Photo Pending
+          {/* Asset Category & Tag */}
+          <div className="relative space-y-0.5">
+            <div className="text-xs font-semibold text-slate-800 tracking-tight truncate max-w-[210px]">
+              {categoryName || 'Laboratory Equipment'}
             </div>
-            {categoryName && (
-              <div className="text-[11px] font-medium text-slate-700 truncate max-w-[200px]">
-                {categoryName}
-              </div>
-            )}
+            <div className="text-[11px] text-slate-400 font-medium">
+              Verified Hardware Unit
+            </div>
           </div>
 
-          {/* Asset Tag Code Pill */}
+          {/* Inventory Code Pill */}
           {showBadge && inventoryCode && (
-            <div className="absolute bottom-2.5 right-2.5 px-2 py-0.5 bg-white/90 border border-slate-200 rounded font-mono text-[10px] font-medium text-slate-600 shadow-xs">
+            <div className="absolute bottom-2.5 right-2.5 px-2 py-0.5 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-md font-mono text-[10px] font-medium text-slate-600 shadow-xs">
               {inventoryCode}
             </div>
           )}

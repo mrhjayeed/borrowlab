@@ -137,55 +137,47 @@ export const Topbar: React.FC = () => {
       </div>
 
       {/* Right: Telemetry & User Controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {user ? (
           <>
             {/* Live Realtime Indicator */}
             <div
-              className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
-                isConnected
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  : 'bg-amber-50 border-amber-200 text-amber-700'
-              }`}
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200/80"
               title={isConnected ? 'Connected to BorrowLab Realtime SSE stream' : 'Connecting to Realtime stream...'}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
-                  isConnected ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-amber-400'
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
                 }`}
               />
-              <span>{isConnected ? 'Real-Time' : 'Connecting'}</span>
-            </div>
-
-            {/* Student Trust Chip */}
-            <div className="hidden md:block">
-              <TrustGauge score={user.trustScore} size="sm" />
+              <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-slate-600">
+                {isConnected ? 'Live' : 'Sync'}
+              </span>
             </div>
 
             {/* Locked Escrow Indicator */}
             {(user.lockedEscrowTotal ?? 0) > 0 && (
-              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#ECFEFF] border border-[#A5F3FC] text-[#0E7490] text-xs font-mono tabular-nums">
-                <Lock className="w-3 h-3 text-[#06B6D4]" />
+              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-200/80 text-cyan-800 text-[11px] font-mono tabular-nums">
+                <Lock className="w-3 h-3 text-cyan-600" />
                 <span>{(user.lockedEscrowTotal ?? 0).toLocaleString()} BDT Escrow</span>
               </div>
             )}
 
             {/* Wallet Balance Pill with Instant Top-Up */}
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-[6px] p-1 gap-1.5 shadow-level-1">
-              <div className="flex items-center gap-1.5 px-2 text-xs">
-                <Wallet className="w-3.5 h-3.5 text-slate-500" />
-                <span className="text-slate-500">Balance:</span>
-                <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                  {(user.walletBalance ?? 0).toLocaleString()} BDT
+            <div className="flex items-center bg-slate-50/90 border border-slate-200/90 rounded-lg p-0.5 pl-2.5 pr-1 gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <Wallet className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-mono font-bold text-slate-900 tabular-nums">
+                  {(user.walletBalance ?? 0).toLocaleString()} <span className="text-[10px] font-normal text-slate-400">BDT</span>
                 </span>
               </div>
               <button
                 onClick={() => setIsDepositOpen(true)}
-                className="h-[26px] px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded text-slate-700 text-[11px] font-medium flex items-center gap-1 transition-colors"
+                className="h-[24px] px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-md text-slate-700 text-[11px] font-medium flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
                 title="Simulate instant wallet top-up"
               >
                 <PlusCircle className="w-3 h-3 text-[#4F46E5]" />
-                Top-Up
+                <span>Top-Up</span>
               </button>
             </div>
 
@@ -193,24 +185,24 @@ export const Topbar: React.FC = () => {
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
+                className="relative p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#4F46E5] rounded-full ring-2 ring-white" />
                 )}
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-lg shadow-level-2 z-40 overflow-hidden animate-in fade-in zoom-in-95">
-                  <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-level-2 z-40 overflow-hidden animate-in fade-in zoom-in-95">
+                  <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                     <span className="text-xs font-semibold text-slate-900 uppercase tracking-wider">
                       Notifications ({unreadCount})
                     </span>
                     {unreadCount > 0 && (
                       <button
                         onClick={markAllRead}
-                        className="text-[11px] text-[#4F46E5] hover:underline"
+                        className="text-[11px] text-[#4F46E5] hover:underline font-medium cursor-pointer"
                       >
                         Mark all read
                       </button>
@@ -218,7 +210,7 @@ export const Topbar: React.FC = () => {
                   </div>
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
                     {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-400">
+                      <div className="p-6 text-center text-xs text-slate-400">
                         No notifications yet
                       </div>
                     ) : (
@@ -230,7 +222,7 @@ export const Topbar: React.FC = () => {
                           }`}
                         >
                           <div className="font-semibold text-slate-900">{n.title}</div>
-                          <div className="text-slate-600 mt-0.5">{n.message}</div>
+                          <div className="text-slate-600 mt-0.5 leading-relaxed">{n.message}</div>
                           <div className="text-[10px] text-slate-400 font-mono mt-1">
                             {new Date(n.created_at).toLocaleDateString()}
                           </div>
@@ -242,23 +234,33 @@ export const Topbar: React.FC = () => {
               )}
             </div>
 
-            {/* Quick Persona Switcher (For Grading & Testing) */}
+            {/* User Profile & Persona Switcher */}
             <div className="relative">
               <button
                 onClick={() => setShowPersonaMenu(!showPersonaMenu)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[6px] border border-brand-200 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-medium transition-colors"
-                title="Switch active user persona"
+                className="flex items-center gap-2 p-1 pr-2.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-xs cursor-pointer shadow-2xs"
+                title="Account menu and persona switcher"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
-                <span className="font-medium">{user.fullName.split(' ')[0]}</span>
-                <span className="text-[10px] px-1 py-0.2 rounded bg-[#4F46E5] text-white uppercase font-bold">
+                {user.profileImageUrl ? (
+                  <img
+                    src={user.profileImageUrl}
+                    alt={user.fullName}
+                    className="w-6 h-6 rounded-full object-cover ring-1 ring-slate-200"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center">
+                    {user.fullName.charAt(0)}
+                  </div>
+                )}
+                <span className="font-medium text-slate-800">{user.fullName.split(' ')[0]}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-semibold font-mono uppercase">
                   {user.roles[0] || 'STUDENT'}
                 </span>
-                <ChevronDown className="w-3 h-3 text-brand-600" />
+                <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
 
               {showPersonaMenu && (
-                <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-level-3 z-40 p-2 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-level-3 z-40 p-2 animate-in fade-in zoom-in-95">
                   <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                     Switch Test Persona
                   </div>

@@ -25,27 +25,27 @@ export const Sidebar: React.FC = () => {
   const isModerator = user?.roles?.includes('MODERATOR') || isAdmin;
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2.5 px-3 py-2 rounded-[6px] text-[13px] font-medium transition-all duration-150 ${
+    `group flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${
       isActive
-        ? 'bg-[#EEF2FF] text-[#4F46E5] font-semibold border border-[#C7D2FE]/60'
-        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
+        ? 'bg-indigo-50/90 text-[#4F46E5] font-semibold shadow-2xs'
+        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
     }`;
 
   return (
-    <aside className="w-[240px] h-screen bg-white border-r border-slate-200 flex flex-col shrink-0 sticky top-0 select-none z-20">
+    <aside className="w-[240px] h-screen bg-white border-r border-slate-200/80 flex flex-col shrink-0 sticky top-0 select-none z-20">
       {/* Brand Header */}
-      <div className="h-[64px] border-b border-slate-200 px-5 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-[#4F46E5] text-white flex items-center justify-center shadow-level-1">
-          <Cpu className="w-5 h-5" />
+      <div className="h-[64px] border-b border-slate-200/80 px-5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#4F46E5] to-indigo-500 text-white flex items-center justify-center shadow-xs">
+          <Cpu className="w-4.5 h-4.5" />
         </div>
         <div>
-          <div className="font-bold text-sm tracking-tight text-slate-900 flex items-center gap-1">
+          <div className="font-bold text-sm tracking-tight text-slate-900 flex items-center gap-1.5">
             BorrowLab
-            <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-slate-100 text-slate-600 uppercase">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 uppercase">
               P2P
             </span>
           </div>
-          <div className="text-[11px] text-slate-500 tracking-tight">Academic Hardware</div>
+          <div className="text-[11px] text-slate-400 font-medium">Campus Exchange</div>
         </div>
       </div>
 
@@ -53,14 +53,16 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
         {/* Discovery */}
         <div>
-          <div className="label-caps px-3 mb-2 text-slate-400">Discovery</div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5">
+            Discovery
+          </div>
           <div className="space-y-1">
             <NavLink to="/browse" className={linkClass}>
-              <Search className="w-4 h-4 text-slate-500" />
+              <Search className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Browse Hardware</span>
             </NavLink>
             <NavLink to="/categories" className={linkClass}>
-              <Compass className="w-4 h-4 text-slate-500" />
+              <Compass className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Hardware Catalog</span>
             </NavLink>
           </div>
@@ -68,38 +70,40 @@ export const Sidebar: React.FC = () => {
 
         {/* Student Workspace */}
         <div>
-          <div className="label-caps px-3 mb-2 text-slate-400">Workspace</div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-1.5">
+            Workspace
+          </div>
           <div className="space-y-1">
             <NavLink to="/dashboard" className={linkClass}>
-              <Grid className="w-4 h-4 text-slate-500" />
+              <Grid className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Dashboard</span>
             </NavLink>
             <NavLink to="/rentals" className={linkClass}>
-              <Repeat className="w-4 h-4 text-slate-500" />
+              <Repeat className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Rentals & Returns</span>
             </NavLink>
             <NavLink to="/inventory" className={linkClass}>
-              <Boxes className="w-4 h-4 text-slate-500" />
+              <Boxes className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>My Hardware</span>
             </NavLink>
             <NavLink to="/listings" className={linkClass}>
-              <Layers className="w-4 h-4 text-slate-500" />
+              <Layers className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>My Listings</span>
             </NavLink>
             <NavLink to="/wallet" className={linkClass}>
-              <Wallet className="w-4 h-4 text-slate-500" />
+              <Wallet className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Wallet & Ledger</span>
             </NavLink>
             <NavLink to="/disputes" className={linkClass}>
-              <AlertTriangle className="w-4 h-4 text-slate-500" />
+              <AlertTriangle className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Disputes</span>
             </NavLink>
             <NavLink to="/waitlist" className={linkClass}>
-              <Clock className="w-4 h-4 text-slate-500" />
+              <Clock className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Waitlist</span>
             </NavLink>
             <NavLink to="/profile" className={linkClass}>
-              <User className="w-4 h-4 text-slate-500" />
+              <User className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
               <span>Account & Profile</span>
             </NavLink>
           </div>
