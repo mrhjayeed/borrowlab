@@ -194,3 +194,9 @@ borrowlab/
 Detailed documentation of the 3NF relational design, SQL aggregations, correlated/nested subqueries, multi-table joins, view definitions, index scan proofs (`EXPLAIN ANALYZE`), and concurrency controls are recorded in:
 
 - [**docs/sql-coverage.md**](docs/sql-coverage.md)
+
+---
+
+## License
+
+This project is open-source software licensed under the [MIT License](LICENSE).
