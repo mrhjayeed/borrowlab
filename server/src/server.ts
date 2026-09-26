@@ -29,8 +29,32 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+];
+
+const envOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
+  origin: (origin, callback) => {
+    // Allow server-to-server, mobile, or curl requests without origin header
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS policy blocked access from origin: ${origin}`));
+  },
   credentials: true,
 }));
 
@@ -81,6 +105,26 @@ app.use('/api/maintenance', maintenanceRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/events', eventsRouter);
+
+// Serve built client frontend SPA in production if client/dist exists
+const clientDistCandidates = [
+  path.resolve(process.cwd(), '../client/dist'),
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(process.cwd(), 'dist/public'),
+  path.resolve(process.cwd(), 'public'),
+];
+const clientDistPath = clientDistCandidates.find((dir) => fs.existsSync(dir));
+
+if (clientDistPath) {
+  console.log(`==> Serving client build from: ${clientDistPath}`);
+  app.use(express.static(clientDistPath));
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Global Error Handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

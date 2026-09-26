@@ -85,7 +85,8 @@ export const RealtimeProvider: React.FC<{ children: ReactNode }> = ({ children }
         eventSourceRef.current = null;
       }
 
-      const url = token ? `/api/events?token=${encodeURIComponent(token)}` : '/api/events';
+      const apiBase = (import.meta.env.VITE_API_BASE || '/api').replace(/\/+$/, '');
+      const url = token ? `${apiBase}/events?token=${encodeURIComponent(token)}` : `${apiBase}/events`;
       const es = new EventSource(url);
       eventSourceRef.current = es;
 

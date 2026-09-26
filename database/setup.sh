@@ -18,6 +18,16 @@ DBNAME="${PGDATABASE:-borrowlab}"
 
 export PGPASSWORD
 
+if [ -n "$DATABASE_URL" ]; then
+    echo "==> Provisioning via DATABASE_URL..."
+    psql "$DATABASE_URL" -f "$DIR/01_schema.sql"
+    psql "$DATABASE_URL" -f "$DIR/02_views.sql"
+    psql "$DATABASE_URL" -f "$DIR/03_indexes.sql"
+    psql "$DATABASE_URL" -f "$DIR/04_seed.sql"
+    echo "==> Database successfully provisioned and seeded via DATABASE_URL!"
+    exit 0
+fi
+
 echo "==> Checking if database '${DBNAME}' exists on ${PGHOST}:${PGPORT}..."
 if psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d postgres -lqt | cut -d \| -f 1 | grep -qw "$DBNAME"; then
     echo "Database '${DBNAME}' exists. Recreating clean database..."

@@ -102,13 +102,15 @@ cp .env.example .env
 ```
 
 ### 3. Provision the Database
-Ensure PostgreSQL is running locally on port `5432`:
+Ensure PostgreSQL is running locally or specify your `DATABASE_URL` in `server/.env`:
 ```bash
-cd ../database
-chmod +x setup.sh
-./setup.sh
+# Option A: Universal Node runner (works on all platforms and cloud databases)
+cd ../server && npm run db:setup
+
+# Option B: Shell script (requires local psql)
+cd ../database && chmod +x setup.sh && ./setup.sh
 ```
-*`setup.sh` automatically reads connection credentials from `server/.env` or standard defaults (`PGUSER=postgres`, `PGPORT=5432`, `DBNAME=borrowlab`).*
+*Both options apply `01_schema.sql`, `02_views.sql`, `03_indexes.sql`, and `04_seed.sql`.*
 
 ### 4. Start the Backend API
 ```bash
@@ -193,7 +195,8 @@ borrowlab/
 
 Detailed documentation of the 3NF relational design, SQL aggregations, correlated/nested subqueries, multi-table joins, view definitions, index scan proofs (`EXPLAIN ANALYZE`), and concurrency controls are recorded in:
 
-- [**docs/sql-coverage.md**](docs/sql-coverage.md)
+- [**docs/sql-coverage.md**](docs/sql-coverage.md) — Comprehensive DBMS rubric proofs, views, indexes, and queries
+- [**docs/deployment.md**](docs/deployment.md) — Production deployment guide (Unified & Decoupled models, environment variables, pre-flight checklist)
 
 ---
 
