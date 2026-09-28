@@ -1,8 +1,6 @@
 # BorrowLab — Academic Hardware Lending Platform
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-borrowlab.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://borrowlab.vercel.app)
-[![Backend API](https://img.shields.io/badge/API-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://borrowlab-api.onrender.com/api/health)
-[![Database](https://img.shields.io/badge/Database-Neon_Postgres-00E599?style=for-the-badge&logo=postgresql&logoColor=white)](https://neon.tech)
 
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -13,8 +11,7 @@
 
 > *"Don’t buy specialized equipment for one semester. Borrow it from a senior."*
 
-🚀 **Live Application**: [https://borrowlab.vercel.app](https://borrowlab.vercel.app)  
-⚡ **API Health Telemetry**: [https://borrowlab-api.onrender.com/api/health](https://borrowlab-api.onrender.com/api/health)
+🚀 **Live Application**: [https://borrowlab.vercel.app](https://borrowlab.vercel.app)
 
 **BorrowLab** is a peer-to-peer academic hardware lending platform engineered for university campuses. It allows engineering students, researchers, and lab faculty to list, discover, and rent physical hardware components (microcontrollers, FPGA boards, oscilloscopes, GPU development kits, sensor modules) with strict transactional guarantees, escrow deposit protection, reputation scoring, and moderator-supervised dispute arbitration.
 
